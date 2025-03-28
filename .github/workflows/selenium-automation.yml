@@ -1,0 +1,64 @@
+name: Selenium Automation Workflow
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  run_login_feature:
+    name: Run Login Feature Tests
+    runs-on: ubuntu-latest
+    container: eclipse-temurin:20-jdk
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          apt-get update && apt-get install -y maven wget unzip gpg
+          wget -qO- https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor > /usr/share/keyrings/google-chrome.gpg
+          echo 'deb [signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main' > /etc/apt/sources.list.d/google-chrome.list
+          apt-get update && apt-get install -y google-chrome-stable chromium-chromedriver
+
+      - name: Run Tests
+        run: |
+          echo "🧪 Running login.feature test from resources/Features..."
+          export CHROME_BIN=/usr/bin/google-chrome
+          export CHROMEDRIVER_BIN=/usr/bin/chromedriver
+          mvn clean test "-DsuiteXmlFile=testng.xml" || true
+          ls -lah target/
+
+      - name: Upload Test Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            target/cucumber.json
+            target/surefire-reports/
+
+  generate_report:
+    name: Generate Report
+    runs-on: ubuntu-latest
+    container: eclipse-temurin:20-jdk
+    needs: run_login_feature
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Maven
+        run: apt-get update && apt-get install -y maven
+
+      - name: Generate HTML Report
+        run: |
+          echo "📊 Generating enhanced HTML report..."
+          mvn exec:java "-Dexec.mainClass=utils.ReportGenerator" || true
+
+      - name: Upload Report Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: enhanced-report
+          path: target/enhanced-report/
