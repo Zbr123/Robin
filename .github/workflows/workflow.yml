@@ -1,4 +1,4 @@
-name: Selenium Automation Workflow
+name: Automation Workflow
 
 on:
   push:
