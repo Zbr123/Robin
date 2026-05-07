@@ -81,17 +81,22 @@ public class DriverManager {
 
     public static WebDriver getDriver() {
         if (driver == null) {
-            logger.info("🟢 Setting up ChromeDriver in headless mode for CI...");
+            boolean headed = Boolean.parseBoolean(System.getProperty("headed", "false"));
+            logger.info(headed
+                    ? "🟢 Setting up ChromeDriver in headed (visible) mode..."
+                    : "🟢 Setting up ChromeDriver in headless mode for CI...");
 
             WebDriverManager.chromedriver().setup();
 
             ChromeOptions options = new ChromeOptions();
-            options.addArguments("--headless"); // Try without `=new` for compatibility
-            options.addArguments("--disable-gpu");
-            options.addArguments("--no-sandbox");
-            options.addArguments("--disable-dev-shm-usage");
-            options.addArguments("--disable-extensions");
-            options.addArguments("--disable-software-rasterizer");
+            if (!headed) {
+                options.addArguments("--headless"); // Try without `=new` for compatibility
+                options.addArguments("--disable-gpu");
+                options.addArguments("--no-sandbox");
+                options.addArguments("--disable-dev-shm-usage");
+                options.addArguments("--disable-extensions");
+                options.addArguments("--disable-software-rasterizer");
+            }
             options.addArguments("--window-size=1920,1080");
 
             // 🔥 FIX: Ensure unique user data directory

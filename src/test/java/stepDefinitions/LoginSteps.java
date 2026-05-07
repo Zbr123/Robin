@@ -11,10 +11,8 @@ import java.time.Duration;
 import org.testng.Assert;
 import io.cucumber.datatable.DataTable;
 import io.cucumber.java.en.And;
-import org.openqa.selenium.By;
-import org.openqa.selenium.WebElement;
-import org.openqa.selenium.support.ui.Select;
 import java.util.Map;
+import java.util.LinkedHashMap;
 import org.openqa.selenium.JavascriptExecutor;
 
 
@@ -32,20 +30,16 @@ public class LoginSteps {
 
     @Given("I am on the login page")
     public void iAmOnTheLoginPage() {
-        String url = "https://dev-robin-uae.santechture.com/ROBIN/";
-        //"https://dev-robin-uae.santechture.com/ROBIN/";
-
-
-        // ✅ Wait for page to fully load
-        new WebDriverWait(driver, Duration.ofSeconds(60)).until(
-                webDriver -> ((JavascriptExecutor) webDriver)
-                        .executeScript("return document.readyState").equals("complete"));
+        String url = "https://auto-robin-qtr.santechture.com/ROBIN";
 
         System.out.println("Opening URL: " + url);
         driver.get(url);
 
-        // Wait for the login header using the locator from LoginPage.java
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(2));
+        new WebDriverWait(driver, Duration.ofSeconds(60)).until(
+                webDriver -> ((JavascriptExecutor) webDriver)
+                        .executeScript("return document.readyState").equals("complete"));
+
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(30));
         wait.until(ExpectedConditions.visibilityOfElementLocated(loginPage.getLoginHeaderLocator()));
 
         // Assert the login header is displayed
@@ -56,8 +50,8 @@ public class LoginSteps {
     @When("I enter username and password")
     public void enterUsernameAndPassword() {
         LoginPage loginPage = new LoginPage(DriverManager.getDriver());
-        loginPage.enterUsername("User-01");
-        loginPage.enterPassword("P123456");
+        loginPage.enterUsername("QFacilityAdmin");
+        loginPage.enterPassword("QFacilityAdmin123");
     }
 
     @And("I click on signin button")
@@ -125,6 +119,7 @@ public class LoginSteps {
     @And("I fill data in patient form")
     public void iFillDataInPatientForm() {
         loginPage.fillPatientFormWithRandomData();
+        loginPage.selectNationalityAmerican();
         loginPage.selectGender();
     }
 
@@ -135,28 +130,18 @@ public class LoginSteps {
         System.out.println("Clicked on 'Add Insurance Card' button.");
     }
 
-    @And("I add Card details")
-    public void iAddCardDetails(DataTable dataTable) {
-        Map<String, String> data = dataTable.asMap(String.class, String.class);        // Selecting Receiver
-        loginPage.selectReceiver();
-        // Selecting Verify Option
-        loginPage.selectVerifyTrue();
-        try {
-            Thread.sleep(5000);  // 3-second pause
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+    @And("I fill mandatory insurance details in Add Insurance modal")
+    public void iFillMandatoryInsuranceDetailsInAddInsuranceModal(DataTable dataTable) {
+        LinkedHashMap<String, String> data = new LinkedHashMap<>();
+        for (Map<String, String> row : dataTable.asMaps(String.class, String.class)) {
+            String field = row.get("Field");
+            String value = row.get("Value");
+            if (field != null && value != null) {
+                data.put(field.trim(), value.trim());
+            }
         }
-        System.out.println("Entered Insurance Card details successfully.");
-        loginPage.selectNetworkName();
-
-
-        // Entering card details
-        loginPage.fillInsuranceCardDetails(
-                data.get("Card Number"),
-                data.get("Start Date"),
-                data.get("End Date")
-        );
-
+        loginPage.fillAddInsuranceModalMandatoryFields(data);
+        System.out.println("Filled mandatory Add Insurance modal fields.");
     }
 
     @And("I click on Save button")
@@ -184,58 +169,18 @@ public class LoginSteps {
         System.out.println("Verified that the Encounter Section is visible.");
     }
 
-    @When("I select home from Encounter Type dropdown")
-    public void iSelectHomeFromEncounterTypeDropdown() {
-        loginPage.selectEncounterTypeHome();
-        System.out.println("Selected 'Home' from the Encounter Type dropdown.");
-    }
-
-    @And("I type location as Family Medicine Clinic")
-    public void iTypeLocationAsFamilyMedicineClinic() {
-        loginPage.enterLocation();
-        System.out.println("Entered 'Family Medicine Clinic' in the location field.");
-    }
-
-    @And("I type and select department as Family Medicine")
-    public void iTypeAndSelectDepartmentAsFamilyMedicineClinic() {
-        loginPage.enterAndSelectDepartment();
-        System.out.println("Typed and selected 'Family Medicine Clinic' in department field.");
-    }
-
-    @And("I type and select Attending Clinician")
-    public void iTypeAndSelectAttendingClinician() {
-        loginPage.enterAndSelectAttendingClinician();
-        System.out.println("Selected attending clinician.");
-    }
-
-    @And("I type and select Ordering Clinician")
-    public void iTypeAndSelectOrderingClinician() {
-        loginPage.enterAndSelectOrderingClinician();
-        System.out.println("Selected ordering clinician.");
-    }
-
-    @And("I select Start Type as Elective")
-    public void iSelectStartTypeAsElective() {
-        loginPage.selectStartTypeElective();
-        System.out.println("Selected 'Elective' from Start Type dropdown.");
-    }
-
-    @And("I select End Type as Discharged with approval")
-    public void iSelectEndTypeAsDischarged() {
-        loginPage.selectEndTypeDischarged();
-        System.out.println("Selected 'Discharged with approval' from End Type dropdown.");
-    }
-
-    @And("I select Visit Type as New")
-    public void iSelectVisitTypeAsNew() {
-        loginPage.selectVisitTypeNew();
-        System.out.println("Selected 'New' from Visit Type dropdown.");
-    }
-
-    @And("I enter end date as {string}")
-    public void iEnterEndDate(String endDate) {
-        loginPage.enterEndDate(endDate);
-        System.out.println("Entered end date: " + endDate);
+    @When("I fill mandatory encounter details")
+    public void iFillMandatoryEncounterDetails(DataTable dataTable) {
+        LinkedHashMap<String, String> data = new LinkedHashMap<>();
+        for (Map<String, String> row : dataTable.asMaps(String.class, String.class)) {
+            String field = row.get("Field");
+            String value = row.get("Value");
+            if (field != null && value != null) {
+                data.put(field.trim(), value.trim());
+            }
+        }
+        loginPage.fillMandatoryEncounterFields(data);
+        System.out.println("Filled mandatory Encounter section fields.");
     }
 
     @And("I click on Diagnosis and Interventions")

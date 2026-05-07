@@ -9,23 +9,26 @@ Feature: Complete Patient Journey with Billing
     And I click on add Patient button
     And I fill data in patient form
     And I click on Add Insurance Card button
-    And I add Card details
-      | Field        | Value                                        |
-      | Card Number  | 12345678901                                  |
-      | Start Date   | 01/01/2025                                   |
-      | End Date     | 31/12/2025                                   |
+    And I fill mandatory insurance details in Add Insurance modal
+      | Field             | Value                                                      |
+      | Member ID         | auto                                                       |
+      | Receiver          | PHI/116849/000006 \| QLM Life & Medical Insurance Company |
+      | Network Name      | QLM Network                                                |
+      | Plan              | QLM Plan                                                   |
+      | Policy Number     | auto                                                       |
+      | Policy Start Date | 01/03/2026                                                 |
+      | Policy End Date   | 01/02/2027                                                 |
+      | Priority          | Primary                                                    |
     And I click on Save button
     And I click on Insert Patient button
     Then I should see Encounter Section
-    When I select home from Encounter Type dropdown
-    And I type location as Family Medicine Clinic
-    And I type and select department as Family Medicine
-    And I type and select Attending Clinician
-    And I type and select Ordering Clinician
-    And I select Start Type as Elective
-    And I select End Type as Discharged with approval
-    And I select Visit Type as New
-    And I enter end date as "31/12/2025"
+    When I fill mandatory encounter details
+      | Field               | Value                                      |
+      | Location            | Hamad                                      |
+      | Department          | 5079                                       |
+      | Attending Clinician | TP82743:Umair Mohamed Z I M Zain           |
+      | Medical Service     | Aids and Appliances                        |
+      | ED Triage Code      | 1 - Resuscitation Immediate                |
     And I click on Diagnosis and Interventions
     Then I should see Add bulk Diagnosis button
     When I select Activity Type as CPT
