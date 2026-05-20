@@ -1,0 +1,22 @@
+[43672:29496:0520/161830.873:INFO:components\enterprise\browser\controller\chrome_browser_cloud_management_controller.cc:238] No machine level policy manager exists.
+[40936:22808:0520/161831.162:INFO:third_party\webrtc\rtc_base\cpu_info.cc:77] Available number of cores: 12
+[41024:44984:0520/161831.172:INFO:third_party\webrtc\rtc_base\cpu_info.cc:77] Available number of cores: 12
+[11824:33296:0520/161831.375:VERBOSE1:components\viz\service\main\viz_main_impl.cc:86] VizNullHypothesis is disabled (not a warning)
+[41908:39748:0520/161831.815:INFO:third_party\webrtc\rtc_base\cpu_info.cc:77] Available number of cores: 12
+[33288:2896:0520/161832.153:INFO:third_party\webrtc\rtc_base\cpu_info.cc:77] Available number of cores: 12
+[43672:29496:0520/161834.931:ERROR:mojo\public\cpp\bindings\lib\interface_endpoint_client.cc:748] Message 1 rejected by interface blink.mojom.WidgetHost
+[43672:27344:0520/161835.191:ERROR:google_apis\gcm\engine\registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
+[43672:29496:0520/161836.350:INFO:CONSOLE:0] "Refused to apply style from 'https://stage-sso.santechture.com/resources/ytzdy/login/robin/lib/zocial/zocial.css' because its MIME type ('') is not a supported stylesheet MIME type, and strict MIME checking is enabled.", source: https://stage-sso.santechture.com/realms/QATAR/protocol/openid-connect/auth?response_type=code&client_id=qatar-client&scope=openid&state=h_yfGTZJ_zE3VS3tLN9CgMSuVEhpJBi48TD1qZTFZZE%3D&redirect_uri=https://stage-sso-qtr-auth.santechture.com/login/oauth2/code/keycloak&nonce=OyDhZyg2eWDljpQ3Fk2ZHf2g5BVrsKd6rwB1NWPwyLs (0)
+[43672:29496:0520/161850.125:INFO:CONSOLE:0] "<meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes">", source: https://auto-robin-qtr.santechture.com/ROBIN/faces/home.xhtml (0)
+[43672:29496:0520/161850.382:INFO:CONSOLE:96] "222", source: https://auto-robin-qtr.santechture.com/ROBIN/faces/home.xhtml (96)
+[43672:29496:0520/161854.531:INFO:CONSOLE:125] "3M loadFrame", source: https://auto-robin-qtr.santechture.com/ROBIN/faces/javax.faces.resource/Call3MCoderFinder.js?ln=js (125)
+[43672:29496:0520/161855.423:INFO:CONSOLE:16] "HO/2023/0004607", source: https://auto-robin-qtr.santechture.com/ROBIN/faces/home.xhtml (16)
+[43672:29496:0520/161855.803:INFO:CONSOLE:0] "<meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes">", source: https://auto-robin-qtr.santechture.com/ROBIN/faces/home.xhtml (0)
+[43672:29496:0520/161856.524:INFO:CONSOLE:16] "HO/2023/0004607", source: https://auto-robin-qtr.santechture.com/ROBIN/faces/home.xhtml (16)
+[43672:27344:0520/161858.645:ERROR:google_apis\gcm\engine\registration_request.cc:291] Registration response error message: QUOTA_EXCEEDED
+[43672:48120:0520/162000.978:INFO:rlz\lib\rlz_lib.cc:442] Attempting to send RLZ ping brand=CHBD
+[43672:48120:0520/162001.313:INFO:rlz\lib\rlz_lib.cc:451] Succeeded in sending RLZ ping
+[43672:29496:0520/162003.068:WARNING:components\autofill\content\browser\content_autofill_driver.cc:246] Skipped Autofill message for inactive frame
+[43672:29496:0520/162003.068:WARNING:components\autofill\content\browser\content_autofill_driver.cc:246] Skipped Autofill message for inactive frame
+[15500:41588:0520/162032.403:VERBOSE1:components\viz\service\main\viz_main_impl.cc:86] VizNullHypothesis is disabled (not a warning)
+[43672:29496:0520/162115.534:INFO:CONSOLE:16] "Widget for var 'patientTbl_widg' not available!", source: https://auto-robin-qtr.santechture.com/ROBIN/faces/javax.faces.resource/core.js?ln=primefaces&v=12.0.0&e=12.0.0 (16)
