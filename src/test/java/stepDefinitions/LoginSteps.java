@@ -35,11 +35,11 @@ public class LoginSteps {
         System.out.println("Opening URL: " + url);
         driver.get(url);
 
-        new WebDriverWait(driver, Duration.ofSeconds(60)).until(
+        new WebDriverWait(driver, Duration.ofSeconds(30)).until(
                 webDriver -> ((JavascriptExecutor) webDriver)
                         .executeScript("return document.readyState").equals("complete"));
 
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(30));
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
         wait.until(ExpectedConditions.visibilityOfElementLocated(loginPage.getLoginHeaderLocator()));
 
         // Assert the login header is displayed
@@ -58,6 +58,11 @@ public class LoginSteps {
     public void iClickOnSignInButton() {
         loginPage.clickSignIn();
         System.out.println("Clicked on the Sign In button.");
+        new WebDriverWait(driver, Duration.ofSeconds(15)).until(
+                ExpectedConditions.or(
+                        ExpectedConditions.elementToBeClickable(
+                                org.openqa.selenium.By.xpath("//h4[text()='Patient Access']")),
+                        ExpectedConditions.urlContains("ROBIN")));
     }
 
     @And("I click on Patient Access")
@@ -76,7 +81,7 @@ public class LoginSteps {
         System.out.println("Clicked on the New Visit button.");
 
         // Wait for "Patient and Encounter" screen to be visible before assertion
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(5));
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
         wait.until(ExpectedConditions.visibilityOfElementLocated(loginPage.getPatientAndEncounterScreenLocator()));
 
         // Assertion to verify "Patient and Encounter" screen is displayed
@@ -90,7 +95,7 @@ public class LoginSteps {
         System.out.println("Clicked on the Add Patient button.");
 
         // Wait for "Create Patient" screen to be visible
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(5));
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
         wait.until(ExpectedConditions.visibilityOfElementLocated(loginPage.getCreatePatientScreenLocator()));
 
         // Assertion to verify "Create Patient" screen is displayed
@@ -148,11 +153,7 @@ public class LoginSteps {
     public void iClickOnSaveButton() {
         loginPage.clickSaveInsuranceCard();
         System.out.println("Clicked on the Save button.");
-        try {
-            Thread.sleep(3000);  // 3-second pause
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
+        loginPage.waitForInsertPatientButtonReady();
     }
 
     @And("I click on Insert Patient button")
@@ -167,6 +168,14 @@ public class LoginSteps {
 
         Assert.assertTrue(loginPage.isEncounterSectionVisible(), "Encounter section is not visible");
         System.out.println("Verified that the Encounter Section is visible.");
+    }
+
+    @And("I wait {string} seconds")
+    public void iWaitForSeconds(String seconds) {
+        String raw = seconds.trim().replace("\"", "");
+        int sec = Integer.parseInt(raw);
+        loginPage.waitForSeconds(sec);
+        System.out.println("Waited " + sec + " seconds.");
     }
 
     @When("I fill mandatory encounter details")
@@ -187,6 +196,20 @@ public class LoginSteps {
     public void iClickOnDiagnosisAndInterventions() {
         loginPage.clickDiagnosisAndInterventions();
         System.out.println("Clicked on 'Diagnosis and Interventions'.");
+    }
+
+    @And("I fill mandatory add service details")
+    public void iFillMandatoryAddServiceDetails(io.cucumber.datatable.DataTable dataTable) {
+        java.util.LinkedHashMap<String, String> data = new java.util.LinkedHashMap<>();
+        for (java.util.Map<String, String> row : dataTable.asMaps(String.class, String.class)) {
+            String field = row.get("Field");
+            String value = row.get("Value");
+            if (field != null && value != null) {
+                data.put(field.trim(), value.trim());
+            }
+        }
+        loginPage.fillMandatoryAddServiceDetails(data);
+        System.out.println("Filled mandatory Add Service details.");
     }
 
     @Then("I should see Add bulk Diagnosis button")
@@ -214,17 +237,25 @@ public class LoginSteps {
         System.out.println("Clicked on 'Add Service' button.");
     }
 
-    @Then("I should see service as added")
-    public void iShouldSeeTheTextCompleted() {
-        boolean isDisplayed = loginPage.isCompletedTextDisplayed();
-        Assert.assertTrue(isDisplayed, "'Completed' text is not displayed.");
-        System.out.println("Verified that 'Completed' text is displayed.");
+    @Then("I should see service as added with service code {string}")
+    public void iShouldSeeServiceAsAddedWithServiceCode(String serviceCode) {
+        loginPage.waitForServiceCodeInActivityList(serviceCode);
+        Assert.assertTrue(
+                loginPage.isServiceCodeDisplayedInActivityList(serviceCode),
+                "Service code '" + serviceCode + "' is not displayed in activity list.");
+        System.out.println("Verified service code '" + serviceCode + "' in activity list.");
     }
 
-    @When("I click on Insert visit button")
-    public void iClickOnInsertVisitButton() {
-        loginPage.clickInsertVisitButton();
-        System.out.println("Clicked on Insert Visit button.");
+    @When("I click on Update visit button")
+    public void iClickOnUpdateVisitButton() {
+        loginPage.clickUpdateVisitButton();
+        System.out.println("Clicked on Update Visit button.");
+    }
+
+    @When("I click on button with text {string}")
+    public void iClickOnButtonWithText(String buttonText) {
+        loginPage.clickButtonContainingText(buttonText);
+        System.out.println("Clicked on button with text: " + buttonText);
     }
 
     @When("I click on Mark As Ready To Bill button")
@@ -233,12 +264,66 @@ public class LoginSteps {
         System.out.println("Clicked on Mark As Ready To Bill button.");
     }
 
-    @Then("I should see success message")
-    public void iShouldSeeSuccessMessage() {
-        loginPage.verifySuccessMessage();
-        System.out.println("Verified success message 'Marked As Ready To Bill Successfully'.");
-        loginPage.clickOkButton();
-        System.out.println("Clicked on OK button.");
+    @Then("I should see success message {string}")
+    public void iShouldSeeSuccessMessage(String expectedMessage) {
+        loginPage.verifyGrowlSuccessMessage(expectedMessage);
+        System.out.println("Verified success message: " + expectedMessage);
+    }
+
+    @When("I edit activity in Diagnosis and Interventions tab")
+    public void iEditActivityInDiagnosisAndInterventionsTab(io.cucumber.datatable.DataTable dataTable) {
+        LinkedHashMap<String, String> data = new LinkedHashMap<>();
+        for (Map<String, String> row : dataTable.asMaps(String.class, String.class)) {
+            String field = row.get("Field");
+            String value = row.get("Value");
+            if (field != null && value != null) {
+                data.put(field.trim(), value.trim());
+            }
+        }
+        loginPage.editActivityInDiagnosisTab(data);
+        System.out.println("Edited activity in Diagnosis and Interventions tab.");
+    }
+
+    @And("I open activity actions menu for row {int}")
+    public void iOpenActivityActionsMenuForRow(int rowIndex) {
+        loginPage.clickActivityRowActionsMenu(
+                new WebDriverWait(driver, Duration.ofSeconds(15)), rowIndex);
+    }
+
+    @And("I click activity menu item {string} for row {int}")
+    public void iClickActivityMenuItemForRow(String menuItem, int rowIndex) {
+        loginPage.clickActivityMenuItem(new WebDriverWait(driver, Duration.ofSeconds(15)), rowIndex, menuItem);
+    }
+
+    @When("I navigate to Bill Management page")
+    public void iNavigateToBillManagementPage() {
+        loginPage.navigateToBillManagementPage();
+        System.out.println("Navigated to Bill Management page.");
+    }
+
+    @And("I click on created patient in bill management list")
+    public void iClickOnCreatedPatientInBillManagementList() {
+        loginPage.clickCreatedPatientInBillManagementList();
+    }
+
+    @And("I click on Generate Bill button")
+    public void iClickOnGenerateBillButton() {
+        loginPage.clickGenerateBillButton();
+    }
+
+    @And("I click alert dialog OK button")
+    public void iClickAlertDialogOkButton() {
+        loginPage.clickAlertDialogOkButton();
+    }
+
+    @And("I select all categorized bills")
+    public void iSelectAllCategorizedBills() {
+        loginPage.selectAllCategorizedBills();
+    }
+
+    @And("I click payment Save button")
+    public void iClickPaymentSaveButton() {
+        loginPage.clickPaymentSaveButton();
     }
 
     @When("I navigate to Billing-OP Receipts page")

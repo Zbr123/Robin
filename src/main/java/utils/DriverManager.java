@@ -99,13 +99,15 @@ public class DriverManager {
             }
             options.addArguments("--window-size=1920,1080");
 
-            // 🔥 FIX: Ensure unique user data directory
-            String userDataDir = System.getProperty("user.dir") + "/tmp/chrome-user-data";
+            String userDataDir = System.getProperty("user.dir") + "/tmp/chrome-user-data-" + System.nanoTime();
             options.addArguments("--user-data-dir=" + userDataDir);
+            options.addArguments("--no-first-run");
+            options.addArguments("--no-default-browser-check");
 
             driver = new ChromeDriver(options);
-            driver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(90));
-            driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(30)); // Optional, adjust for elements loading
+            driver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(60));
+            // Explicit waits only — implicit wait adds latency on every lookup when elements are missing.
+            driver.manage().timeouts().implicitlyWait(Duration.ZERO);
 
             logger.info("✅ ChromeDriver ready.");
         }

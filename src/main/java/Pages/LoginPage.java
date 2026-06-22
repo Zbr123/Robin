@@ -19,6 +19,8 @@ import java.util.concurrent.ThreadLocalRandom;
 import org.openqa.selenium.interactions.Actions;
 import org.openqa.selenium.StaleElementReferenceException;
 import org.openqa.selenium.ElementClickInterceptedException;
+import org.openqa.selenium.InvalidElementStateException;
+import org.openqa.selenium.ElementNotInteractableException;
 
 
 public class LoginPage {
@@ -108,8 +110,16 @@ public class LoginPage {
     private By encounterLocationInput = By.id("InvoiceForm:location_input");
     private By encounterDepartmentInput = By.id("InvoiceForm:dept_input");
     private By encounterAttendingClinicianInput = By.id("InvoiceForm:clinician_input");
-    private static final String ENCOUNTER_MEDICAL_SERVICE_WIDGET = "InvoiceForm:medicalService";
-    private static final String ENCOUNTER_ED_TRIAGE_WIDGET = "InvoiceForm:triageCode";
+    /** PrimeFaces selectOneMenu client ids (panel/options: {@code medicalServiceID_panel}, {@code eDTriageCode_panel}). */
+    private static final String ENCOUNTER_MEDICAL_SERVICE_WIDGET = "InvoiceForm:medicalServiceID";
+    private static final String ENCOUNTER_ED_TRIAGE_WIDGET = "InvoiceForm:eDTriageCode";
+    /** ED Disposition Code selectOneMenu ({@code InvoiceForm:eDDisposition_Code}). */
+    private static final String ENCOUNTER_ED_DISPOSITION_WIDGET = "InvoiceForm:eDDisposition_Code";
+    /** Encounter Class / Status ({@code encounterForm:icd_input}, {@code encounterForm:encounterStatusValue_input}). */
+    private static final String ENCOUNTER_CLASS_WIDGET = "encounterForm:icd";
+    private static final String ENCOUNTER_STATUS_WIDGET = "encounterForm:encounterStatusValue";
+    private static final String ENCOUNTER_CLASS_SELECT_ID = "encounterForm:icd_input";
+    private static final String ENCOUNTER_STATUS_SELECT_ID = "encounterForm:encounterStatusValue_input";
     private By locationInputField = By.xpath("//input[@id='InvoiceForm:location_input']");
     private By locationDropdownOption = By.xpath("//td[text()='Family Medicine Clinic']");
     private By departmentInputField = By.xpath("//input[@id='InvoiceForm:dept_input']");
@@ -130,13 +140,29 @@ public class LoginPage {
     private By activityTypeDropdown = By.xpath("//div[@id='AccumedHaadActivityListForm:activityType']//div[contains(@class, 'ui-selectonemenu-trigger')]");
     private By cptOption = By.xpath("//li[text()='CPT']");
     private By codeField = By.xpath("//input[@id='AccumedHaadActivityListForm:activityCode_input']");
+    private static final String ACTIVITY_TYPE_WIDGET = "AccumedHaadActivityListForm:activityType";
+    private static final String ACTIVITY_TYPE_SELECT_ID = "AccumedHaadActivityListForm:activityType_input";
+    private static final String ACTIVITY_ORDER_STATUS_EDIT_WIDGET =
+            "AccumedHaadActivityListForm:activityOrderStatusEditMode";
+    private By activityCodeInput = By.id("AccumedHaadActivityListForm:activityCode_input");
+    private By activityStartDateInput = By.id("AccumedHaadActivityListForm:startDate_input");
+    private By generateBillButton = By.id("AccumedHaadActivityListForm:generateBillBtn");
+    private By alertDialogOkButton = By.xpath(
+            "//form[contains(@id,'alerForm')]//button[.//span[normalize-space()='OK']]"
+                    + " | //button[contains(@id,'alerForm')][.//span[normalize-space()='OK']]");
+    private By selectAllCategorizedBillsCheckbox = By.id("paymentForm:categorizedBillsTbl_head_checkbox");
+    private By addPaymentButton = By.id("paymentForm:addPaymentBtn");
+    private By paymentSaveButton = By.xpath(
+            "//button[contains(@onclick,'addPaymentCompleteBtn')][.//span[normalize-space()='Save']]");
+    private By billManagementMenuLink = By.xpath(
+            "//span[contains(@class,'layout-menuitem-text') and normalize-space()='Bill Management']/ancestor::a[1]");
     private By code70030Option = By.xpath("//td[text()='70030']");
-    private By addServiceButton = By.xpath("//button[@id='AccumedHaadActivityListForm:addServiceBTN']");
-    private By completedText = By.xpath("//td[text()='Completed']");
-    private By insertVisitButton = By.xpath("//button[span[text()='Insert Visit']]");
+    private By addServiceButton = By.id("AccumedHaadActivityListForm:addServiceBTN");
+    private By updateVisitButton = By.id("actionsFormInvoice:j_idt2194");   
     private By markAsReadyToBillButton = By.xpath("//button[span[text()='Mark As Ready To Bill']]");
-    private By successMessage = By.xpath("//span[text()='Marked As Ready To Bill Successfully']");
     private By okButton = By.xpath("//span[text()='OK']");
+    private By billingMenuLink = By.xpath(
+            "//span[contains(@class,'layout-menuitem-text') and normalize-space()='Billing']/ancestor::a[1]");
     private By billingLink = By.xpath("//a[span[text()='Billing']]");
     private By opReceiptsLink = By.xpath("//a[span[text()='OP Receipts']]");
     private By paymentTypeDropdown = By.xpath("//div[@id='paymentForm:payment:0:sfsfsdf']");
@@ -157,6 +183,13 @@ public class LoginPage {
         driver.findElement(passwordField).sendKeys(password);
     }
 
+    /** Fixed delay for manual pacing or AJAX settle (use sparingly). */
+    public void waitForSeconds(int seconds) {
+        if (seconds > 0) {
+            sleepQuietMs(seconds * 1000);
+        }
+    }
+
     // Method to check if login header is displayed
     public boolean isLoginHeaderDisplayed() {
         return driver.findElement(loginHeader).isDisplayed();
@@ -173,7 +206,10 @@ public class LoginPage {
     }
 
     public void clickPatientAccess() {
-        driver.findElement(patientAccess).click();
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        WebElement link = wait.until(ExpectedConditions.elementToBeClickable(patientAccess));
+        scrollToElement(link);
+        link.click();
     }
 
     // Method to verify Patient Access screen
@@ -265,7 +301,7 @@ public class LoginPage {
         driver.findElement(firstNameField).sendKeys(randomFirstName);
         driver.findElement(lastNameField).sendKeys(randomLastName);
         driver.findElement(dobField).sendKeys(hardcodedDOB);
-        selectQidExpiryDateFromCalendar(21, 4, 2026);
+        typeQidExpiryDateDirect(21, 4, 2026);
 
         System.out.println("Filled Patient Form with Random Data:");
         System.out.println("MRN: " + randomMRN);
@@ -284,7 +320,7 @@ public class LoginPage {
      * Opens the PrimeFaces/jQuery datepicker for QID Expiry Date and picks the given day/month/year.
      */
     private void selectQidExpiryDateFromCalendar(int day, int month1Based, int year) {
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20));
         WebElement input = wait.until(ExpectedConditions.elementToBeClickable(qidExpiryDateInput));
         scrollToElement(input);
         WebElement trigger = null;
@@ -310,16 +346,33 @@ public class LoginPage {
             WebElement yearSelect = panel.findElement(By.cssSelector("select.ui-datepicker-year"));
             new Select(yearSelect).selectByValue(Integer.toString(year));
         } catch (org.openqa.selenium.NoSuchElementException e) {
-            throw new org.openqa.selenium.NoSuchElementException(
-                    "QID datepicker: expected month/year <select> inside #ui-datepicker-div. Update navigation if UI differs.", e);
+            typeQidExpiryDateDirect(day, month1Based, year);
+            return;
         }
         String dayStr = Integer.toString(day);
         By dayCell = By.xpath(
                 "//div[@id='ui-datepicker-div']//td[not(contains(@class,'ui-datepicker-other-month'))"
                         + " and not(contains(@class,'ui-datepicker-unselectable'))]//a[normalize-space()='" + dayStr + "']");
-        WebElement dayLink = wait.until(ExpectedConditions.elementToBeClickable(dayCell));
-        dayLink.click();
-        wait.until(ExpectedConditions.invisibilityOfElementLocated(datepickerPanel));
+        try {
+            WebElement dayLink = wait.until(ExpectedConditions.elementToBeClickable(dayCell));
+            try {
+                dayLink.click();
+            } catch (ElementClickInterceptedException e) {
+                ((JavascriptExecutor) driver).executeScript("arguments[0].click();", dayLink);
+            }
+            wait.until(ExpectedConditions.invisibilityOfElementLocated(datepickerPanel));
+        } catch (org.openqa.selenium.TimeoutException e) {
+            typeQidExpiryDateDirect(day, month1Based, year);
+        }
+    }
+
+    private void typeQidExpiryDateDirect(int day, int month1Based, int year) {
+        String formatted = String.format("%02d/%02d/%04d", day, month1Based, year);
+        WebElement input = driver.findElement(qidExpiryDateInput);
+        scrollToElement(input);
+        input.click();
+        input.clear();
+        input.sendKeys(formatted);
     }
 
     public String getRandomFirstName() {
@@ -342,11 +395,7 @@ public class LoginPage {
         WebElement option = findAmericanOptionInsidePanel(panel, wait);
         ((JavascriptExecutor) driver).executeScript(
                 "arguments[0].scrollIntoView({block:'center', inline:'nearest'});", option);
-        try {
-            new Actions(driver).moveToElement(option).pause(Duration.ofMillis(150)).click().perform();
-        } catch (Exception e) {
-            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", option);
-        }
+        clickListOption(option);
         try {
             wait.until(ExpectedConditions.invisibilityOfElementLocated(nationalityDropdownPanelById));
         } catch (Exception e1) {
@@ -438,8 +487,12 @@ public class LoginPage {
     }
 
     public void selectGender() {
-        driver.findElement(genderDropdown).click();
-        driver.findElement(genderOption).click();
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+        WebElement trigger = wait.until(ExpectedConditions.elementToBeClickable(genderDropdown));
+        scrollToElement(trigger);
+        trigger.click();
+        WebElement option = wait.until(ExpectedConditions.elementToBeClickable(genderOption));
+        clickListOption(option);
     }
 
     // **Method to Click "Add Insurance Card"**
@@ -457,7 +510,7 @@ public class LoginPage {
      * strings ({@code 0000}–{@code 9999}) each run; table values for those keys are ignored.
      */
     public void fillAddInsuranceModalMandatoryFields(Map<String, String> fields) {
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20));
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
         wait.until(ExpectedConditions.visibilityOfElementLocated(addInsuranceModalReceiverLabel));
 
         String randomMemberId = randomFourDigits();
@@ -473,8 +526,9 @@ public class LoginPage {
         String receiver = mapGet(fields, "Receiver");
         if (receiver != null && !receiver.isEmpty()) {
             System.out.println("Add Insurance modal: selecting Receiver...");
-            selectSelectOneMenuOption(RECEIVER_WIDGET, receiver);
+            selectSelectOneMenuOptionWithRetry(RECEIVER_WIDGET, receiver);
             System.out.println("Add Insurance modal: Receiver selected.");
+            waitForInsuranceDropdownEnabled(wait, NETWORK_WIDGET);
         }
         String payer = mapGet(fields, "Payer");
         if (payer != null && !payer.isEmpty()) {
@@ -494,19 +548,17 @@ public class LoginPage {
         String network = mapGet(fields, "Network Name");
         if (network != null && !network.isEmpty()) {
             System.out.println("Add Insurance modal: selecting Network...");
-            selectInsuranceModalDropdownByDataLabel(
-                    addInsuranceNetworkDropdownLabel, NETWORK_WIDGET, network.trim());
-            // Network selection can AJAX-refresh the modal; Plan list stays empty until that finishes.
-            new WebDriverWait(driver, Duration.ofSeconds(25))
+            selectSelectOneMenuOptionWithRetry(NETWORK_WIDGET, network.trim());
+            // Network selection AJAX-refreshes Plan options.
+            waitForInsuranceDropdownEnabled(wait, PLAN_WIDGET);
+            new WebDriverWait(driver, Duration.ofSeconds(15))
                     .until(ExpectedConditions.elementToBeClickable(addInsurancePlanDropdownLabel));
-            sleepQuietMs(400);
             System.out.println("Add Insurance modal: Network selected.");
         }
         String plan = mapGet(fields, "Plan");
         if (plan != null && !plan.isEmpty()) {
             System.out.println("Add Insurance modal: selecting Plan...");
-            selectInsuranceModalDropdownByDataLabel(
-                    addInsurancePlanDropdownLabel, PLAN_WIDGET, plan.trim());
+            selectSelectOneMenuOptionWithRetry(PLAN_WIDGET, plan.trim());
             System.out.println("Add Insurance modal: Plan selected.");
         }
         WebElement policyField = waitForVisibleAddInsurancePolicyNumberInput(wait);
@@ -679,8 +731,47 @@ public class LoginPage {
      * Opens PrimeFaces p:selectOneMenu: prefer label ({@code id}_label) like in DevTools, then wait for
      * {@code id}_panel; fall back to trigger arrow if the panel does not appear.
      */
+    /** After Receiver (or Network) AJAX, dependent insurance dropdowns must be enabled before interaction. */
+    private void waitForInsuranceDropdownEnabled(WebDriverWait wait, String widgetBaseId) {
+        By labelBy = By.id(widgetBaseId + "_label");
+        wait.until(ExpectedConditions.elementToBeClickable(labelBy));
+        wait.until(d -> {
+            try {
+                WebElement widget = d.findElement(By.id(widgetBaseId));
+                if (!widget.isDisplayed()) {
+                    return false;
+                }
+                String cls = widget.getAttribute("class");
+                return cls == null || !cls.contains("ui-state-disabled");
+            } catch (org.openqa.selenium.NoSuchElementException | StaleElementReferenceException e) {
+                return false;
+            }
+        });
+    }
+
+    private boolean selectOneMenuPanelHasVisibleItems(String panelDomId) {
+        for (WebElement panel : driver.findElements(By.id(panelDomId))) {
+            try {
+                if (!panel.isDisplayed()) {
+                    continue;
+                }
+                for (WebElement li : findSelectOneMenuListItems(panel)) {
+                    if (li.isDisplayed()) {
+                        return true;
+                    }
+                }
+            } catch (StaleElementReferenceException ignored) {
+                // retry on next poll
+            }
+        }
+        return false;
+    }
+
     private void openSelectOneMenuPanel(String widgetBaseId, WebDriverWait wait) {
         String panelDomId = widgetBaseId + "_panel";
+        if (isSelectOneMenuPanelVisible(panelDomId) && selectOneMenuPanelHasVisibleItems(panelDomId)) {
+            return;
+        }
         By labelBy = By.id(widgetBaseId + "_label");
         List<WebElement> labels = driver.findElements(labelBy);
         if (!labels.isEmpty()) {
@@ -694,11 +785,12 @@ public class LoginPage {
                 // fall through to trigger
             }
         }
-        for (int i = 0; i < 25; i++) {
-            if (isSelectOneMenuPanelVisible(panelDomId)) {
-                return;
-            }
-            sleepQuietMs(100);
+        try {
+            new WebDriverWait(driver, Duration.ofSeconds(3))
+                    .until(d -> isSelectOneMenuPanelVisible(panelDomId));
+            return;
+        } catch (org.openqa.selenium.TimeoutException ignored) {
+            // open via trigger arrow
         }
         By trigger = By.xpath("//*[@id='" + widgetBaseId + "']//div[contains(@class,'ui-selectonemenu-trigger')]");
         wait.until(ExpectedConditions.elementToBeClickable(trigger));
@@ -760,70 +852,70 @@ public class LoginPage {
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20));
         WebElement label = wait.until(ExpectedConditions.elementToBeClickable(dropdownLabelBy));
         scrollToElement(label);
-        ((JavascriptExecutor) driver).executeScript("arguments[0].click();", label);
-        sleepQuietMs(300);
-        if (!isSelectOneMenuPanelVisible(widgetBaseId + "_panel")) {
-            openSelectOneMenuPanel(widgetBaseId, wait);
-        }
-        By item = liByDataLabelInPanel(dataLabel);
-        String panelDomId = widgetBaseId + "_panel";
-        // Re-resolve panel + row each poll: PrimeFaces AJAX can replace the overlay DOM and stale the parent.
-        String dataLabelNorm = dataLabel.trim();
-        WebElement option = wait.until(d -> {
-            try {
-                List<WebElement> panels = d.findElements(By.id(panelDomId));
-                for (int i = panels.size() - 1; i >= 0; i--) {
-                    WebElement p = panels.get(i);
-                    if (!p.isDisplayed()) {
-                        continue;
-                    }
-                    for (WebElement li : p.findElements(item)) {
-                        try {
-                            if (li.isDisplayed()) {
-                                return li;
-                            }
-                        } catch (StaleElementReferenceException ignored) {
-                            // list rerendered
-                        }
-                    }
-                    for (WebElement li : p.findElements(By.cssSelector("li.ui-selectonemenu-item"))) {
-                        try {
-                            if (!li.isDisplayed()) {
-                                continue;
-                            }
-                            String dl = li.getAttribute("data-label");
-                            if (dl != null && dl.trim().equalsIgnoreCase(dataLabelNorm)) {
-                                return li;
-                            }
-                            String t = li.getText();
-                            if (t != null && t.trim().equalsIgnoreCase(dataLabelNorm)) {
-                                return li;
-                            }
-                        } catch (StaleElementReferenceException ignored) {
-                            // next
-                        }
-                    }
-                }
-            } catch (StaleElementReferenceException ignored) {
-                return null;
-            }
-            return null;
-        });
-        clickListOption(option);
+        selectSelectOneMenuOption(widgetBaseId, dataLabel);
     }
 
     private void selectSelectOneMenuOption(String widgetBaseId, String optionMatch) {
         if (optionMatch == null || optionMatch.isBlank()) {
             return;
         }
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20));
+        if (isSelectOneMenuAlreadySet(widgetBaseId, optionMatch)) {
+            return;
+        }
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
         openSelectOneMenuPanel(widgetBaseId, wait);
-        sleepQuietMs(300);
-        WebElement panel = findVisibleSelectOneMenuPanel(widgetBaseId + "_panel", wait);
-        clickMatchingSelectOneMenuItem(panel, optionMatch.trim(), wait);
+        String panelDomId = widgetBaseId + "_panel";
+        // Panel can open before PrimeFaces finishes loading list items (e.g. Network after Receiver).
+        wait.until(d -> selectOneMenuPanelHasVisibleItems(panelDomId));
+        clickMatchingSelectOneMenuItem(panelDomId, optionMatch.trim(), wait);
     }
 
-    private void applySelectOneMenuFilterIfPresent(WebElement panel, String optionMatch) {
+    private void selectSelectOneMenuOptionWithRetry(String widgetBaseId, String optionMatch) {
+        if (optionMatch == null || optionMatch.isBlank()) {
+            return;
+        }
+        if (isSelectOneMenuAlreadySet(widgetBaseId, optionMatch)) {
+            return;
+        }
+        org.openqa.selenium.TimeoutException lastTimeout = null;
+        for (int attempt = 0; attempt < 3; attempt++) {
+            try {
+                selectSelectOneMenuOption(widgetBaseId, optionMatch);
+                if (isSelectOneMenuAlreadySet(widgetBaseId, optionMatch)) {
+                    return;
+                }
+            } catch (org.openqa.selenium.TimeoutException | StaleElementReferenceException e) {
+                lastTimeout = e instanceof org.openqa.selenium.TimeoutException
+                        ? (org.openqa.selenium.TimeoutException) e : lastTimeout;
+                System.out.println("Retry selectOneMenu " + widgetBaseId + " (attempt " + (attempt + 1) + ")...");
+                dismissVisibleAutocompletePanelsIfPresent();
+                sleepQuietMs(600);
+            }
+        }
+        if (lastTimeout != null) {
+            throw lastTimeout;
+        }
+    }
+
+    private WebElement findDisplayedPanelById(String panelDomId) {
+        List<WebElement> panels = driver.findElements(By.id(panelDomId));
+        for (int i = panels.size() - 1; i >= 0; i--) {
+            try {
+                if (panels.get(i).isDisplayed()) {
+                    return panels.get(i);
+                }
+            } catch (StaleElementReferenceException ignored) {
+                // try next panel instance
+            }
+        }
+        return null;
+    }
+
+    private void applySelectOneMenuFilterIfPresent(String panelDomId, String optionMatch) {
+        WebElement panel = findDisplayedPanelById(panelDomId);
+        if (panel == null) {
+            return;
+        }
         try {
             List<WebElement> filters = panel.findElements(By.cssSelector("input.ui-selectonemenu-filter"));
             if (filters.isEmpty()) {
@@ -836,7 +928,23 @@ public class LoginPage {
             String q = optionMatch.length() > 16 ? optionMatch.substring(0, 16) : optionMatch;
             f.clear();
             f.sendKeys(q);
-            sleepQuietMs(250);
+            String match = optionMatch;
+            new WebDriverWait(driver, Duration.ofSeconds(3)).until(d -> {
+                WebElement activePanel = findDisplayedPanelById(panelDomId);
+                if (activePanel == null) {
+                    return false;
+                }
+                try {
+                    for (WebElement li : findSelectOneMenuListItems(activePanel)) {
+                        if (li.isDisplayed() && rowMatchesSelectOption(li, match)) {
+                            return true;
+                        }
+                    }
+                } catch (StaleElementReferenceException ignored) {
+                    return false;
+                }
+                return false;
+            });
         } catch (Exception ignored) {
             // no filter or not usable
         }
@@ -860,40 +968,72 @@ public class LoginPage {
     }
 
     private boolean rowMatchesSelectOption(WebElement li, String optionMatch) {
-        String dataLabel = li.getAttribute("data-label");
-        if (dataLabel != null && optionMatchesDropdownValue(dataLabel, optionMatch)) {
-            return true;
-        }
-        String text = li.getText();
-        if (text != null && !text.isBlank() && optionMatchesDropdownValue(text, optionMatch)) {
-            return true;
-        }
-        String textContent = li.getAttribute("textContent");
-        if (textContent != null && optionMatchesDropdownValue(textContent, optionMatch)) {
-            return true;
+        try {
+            String dataLabel = li.getAttribute("data-label");
+            if (dataLabel != null) {
+                String dl = dataLabel.trim();
+                String want = optionMatch.trim();
+                if (dl.equalsIgnoreCase(want) || optionMatchesDropdownValue(dataLabel, optionMatch)) {
+                    return true;
+                }
+            }
+            String text = li.getText();
+            if (text != null && !text.isBlank() && optionMatchesDropdownValue(text, optionMatch)) {
+                return true;
+            }
+            String textContent = li.getAttribute("textContent");
+            if (textContent != null && optionMatchesDropdownValue(textContent, optionMatch)) {
+                return true;
+            }
+        } catch (StaleElementReferenceException ignored) {
+            return false;
         }
         return false;
     }
 
-    private void clickMatchingSelectOneMenuItem(WebElement panel, String optionMatch, WebDriverWait wait) {
-        wait.until(ExpectedConditions.visibilityOf(panel));
-        applySelectOneMenuFilterIfPresent(panel, optionMatch);
-        List<WebElement> items = findSelectOneMenuListItems(panel);
-        for (WebElement li : items) {
-            try {
-                if (!li.isDisplayed()) {
-                    continue;
-                }
-            } catch (StaleElementReferenceException e) {
-                continue;
+    private void clickMatchingSelectOneMenuItem(String panelDomId, String optionMatch, WebDriverWait wait) {
+        wait.until(d -> findDisplayedPanelById(panelDomId) != null);
+        applySelectOneMenuFilterIfPresent(panelDomId, optionMatch);
+        String match = optionMatch.trim();
+        WebElement option = wait.until(d -> {
+            WebElement activePanel = findDisplayedPanelById(panelDomId);
+            if (activePanel == null) {
+                return null;
             }
-            if (rowMatchesSelectOption(li, optionMatch)) {
-                clickListOption(li);
+            for (WebElement li : findSelectOneMenuListItems(activePanel)) {
+                try {
+                    if (li.isDisplayed() && rowMatchesSelectOption(li, match)) {
+                        return li;
+                    }
+                } catch (StaleElementReferenceException ignored) {
+                    // list rerendered
+                }
+            }
+            return null;
+        });
+        for (int attempt = 0; attempt < 3; attempt++) {
+            try {
+                clickListOption(option);
                 return;
+            } catch (StaleElementReferenceException e) {
+                option = wait.until(d -> {
+                    WebElement activePanel = findDisplayedPanelById(panelDomId);
+                    if (activePanel == null) {
+                        return null;
+                    }
+                    for (WebElement li : findSelectOneMenuListItems(activePanel)) {
+                        try {
+                            if (li.isDisplayed() && rowMatchesSelectOption(li, match)) {
+                                return li;
+                            }
+                        } catch (StaleElementReferenceException ignored) {
+                            // retry
+                        }
+                    }
+                    return null;
+                });
             }
         }
-        throw new org.openqa.selenium.NoSuchElementException(
-                "No dropdown item matching \"" + optionMatch + "\" in panel for widget.");
     }
 
     /** Full substring match, or when value uses " | ", all segments must appear (spacing-insensitive). */
@@ -923,23 +1063,38 @@ public class LoginPage {
     private void clickListOption(WebElement li) {
         ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView({block:'center', inline:'nearest'});", li);
         try {
-            new Actions(driver).moveToElement(li).pause(Duration.ofMillis(120)).click().perform();
+            new Actions(driver).moveToElement(li).click().perform();
         } catch (Exception e) {
             ((JavascriptExecutor) driver).executeScript("arguments[0].click();", li);
         }
     }
 
+    /** After Save on insurance card, Insert Patient should become actionable without a fixed delay. */
+    public void waitForInsertPatientButtonReady() {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        wait.until(ExpectedConditions.elementToBeClickable(insertPatientButton));
+    }
+
     public void clickInsertPatientButton() {
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
-        WebElement btn = wait.until(ExpectedConditions.presenceOfElementLocated(insertPatientButton));
-        scrollToElement(btn);
-        try {
-            wait.until(ExpectedConditions.elementToBeClickable(insertPatientButton)).click();
-        } catch (ElementClickInterceptedException e) {
-            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", driver.findElement(insertPatientButton));
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        for (int attempt = 0; attempt < 3; attempt++) {
+            try {
+                WebElement btn = wait.until(ExpectedConditions.elementToBeClickable(insertPatientButton));
+                scrollToElement(btn);
+                btn.click();
+                System.out.println("Clicked on Insert Patient button.");
+                wait.until(ExpectedConditions.visibilityOfElementLocated(encounterSection));
+                return;
+            } catch (StaleElementReferenceException e) {
+                System.out.println("Insert Patient button stale, re-finding...");
+            } catch (ElementClickInterceptedException e) {
+                WebElement btn = wait.until(ExpectedConditions.presenceOfElementLocated(insertPatientButton));
+                ((JavascriptExecutor) driver).executeScript("arguments[0].click();", btn);
+                System.out.println("Clicked on Insert Patient button (JS).");
+                wait.until(ExpectedConditions.visibilityOfElementLocated(encounterSection));
+                return;
+            }
         }
-        System.out.println("Clicked on Insert Patient button.");
-        sleepQuietMs(6000);
     }
 
     public boolean isEncounterSectionVisible() {
@@ -960,36 +1115,45 @@ public class LoginPage {
     /**
      * Fills mandatory encounter fields only, using the same flow as manual entry: text / autocomplete /
      * {@code p:selectOneMenu} near each label inside the Encounter section.
-     * <p>Supported keys (case-insensitive): Start Date, Location, Department, Attending Clinician,
-     * Medical Service, ED Triage Code (or ED Triage).
+     * <p>Supported keys (case-insensitive): Encounter Class, Encounter Status, Start Date, Location, Department,
+     * Attending Clinician, Medical Service, ED Triage Code (or ED Triage), ED Disposition Code
+     * (or Disposition Code / ED Disposition).
      */
     public void fillMandatoryEncounterFields(Map<String, String> fields) {
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(30));
-        wait.until(ExpectedConditions.visibilityOfElementLocated(encounterSection));
-        sleepQuietMs(500);
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        WebElement encounter = wait.until(ExpectedConditions.visibilityOfElementLocated(encounterSection));
+        scrollToElement(encounter);
 
         String startDate = mapGet(fields, "Start Date");
         if (startDate != null && !startDate.isBlank()) {
             WebElement input = findEncounterVisibleInputWithFallback(wait, encounterStartDateInput, "Start Date");
-            setEncounterTextInputNearLabel(input, startDate.trim());
+            setEncounterTextInputWithRetry(input, startDate.trim());
             System.out.println("Encounter: Start Date filled.");
         }
         String location = mapGet(fields, "Location");
         if (location != null && !location.isBlank()) {
-            encounterAutocompleteNearLabel(wait, "Location", location.trim());
+            encounterAutocompleteWithRetry(wait, "Location", location.trim());
         }
         String department = mapGet(fields, "Department");
         if (department != null && !department.isBlank()) {
-            encounterAutocompleteNearLabel(wait, "Department", department.trim());
+            wait.until(d -> {
+                try {
+                    WebElement dept = d.findElement(encounterDepartmentInput);
+                    return dept.isDisplayed() && dept.isEnabled();
+                } catch (Exception e) {
+                    return false;
+                }
+            });
+            encounterAutocompleteWithRetry(wait, "Department", department.trim());
         }
         String attending = mapGet(fields, "Attending Clinician");
         if (attending != null && !attending.isBlank()) {
-            encounterAutocompleteNearLabel(wait, "Attending Clinician", attending.trim());
+            encounterAutocompleteWithRetry(wait, "Attending Clinician", attending.trim());
         }
         String medService = mapGet(fields, "Medical Service");
         if (medService != null && !medService.isBlank()) {
-            selectEncounterSelectOneByKnownWidgetOrLabel(
-                    wait, ENCOUNTER_MEDICAL_SERVICE_WIDGET, "Medical Service", medService.trim());
+            dismissVisibleAutocompletePanels();
+            selectSelectOneMenuOptionWithRetry(ENCOUNTER_MEDICAL_SERVICE_WIDGET, medService.trim());
             System.out.println("Encounter: Medical Service selected.");
         }
         String edTriage = mapGet(fields, "ED Triage Code");
@@ -997,33 +1161,357 @@ public class LoginPage {
             edTriage = mapGet(fields, "ED Triage");
         }
         if (edTriage != null && !edTriage.isBlank()) {
-            selectEncounterSelectOneByKnownWidgetOrLabel(
-                    wait, ENCOUNTER_ED_TRIAGE_WIDGET, "ED Triage", edTriage.trim());
+            dismissVisibleAutocompletePanels();
+            selectSelectOneMenuOptionWithRetry(ENCOUNTER_ED_TRIAGE_WIDGET, edTriage.trim());
             System.out.println("Encounter: ED Triage selected.");
+            sleepQuietMs(400);
         }
-        sleepQuietMs(400);
+        String edDisposition = mapGet(fields, "ED Disposition Code");
+        if (edDisposition == null || edDisposition.isBlank()) {
+            edDisposition = mapGet(fields, "Disposition Code");
+        }
+        if (edDisposition == null || edDisposition.isBlank()) {
+            edDisposition = mapGet(fields, "ED Disposition");
+        }
+        if (edDisposition != null && !edDisposition.isBlank()) {
+            dismissVisibleAutocompletePanels();
+            waitForInsuranceDropdownEnabled(wait, ENCOUNTER_ED_DISPOSITION_WIDGET);
+            selectSelectOneMenuOptionWithRetry(ENCOUNTER_ED_DISPOSITION_WIDGET, edDisposition.trim());
+            System.out.println("Encounter: ED Disposition Code selected.");
+        }
+
+        dismissVisibleAutocompletePanels();
+        String encounterClass = mapGet(fields, "Encounter Class");
+        if (encounterClass != null && !encounterClass.isBlank()) {
+            String classValue = encounterClass.trim();
+            selectEncounterFormDropdown(wait, ENCOUNTER_CLASS_WIDGET, ENCOUNTER_CLASS_SELECT_ID, classValue);
+            System.out.println("Encounter: Encounter Class selected.");
+            String encounterStatus = mapGet(fields, "Encounter Status");
+            if (encounterStatus != null && !encounterStatus.isBlank()) {
+                wait.until(d -> isEncounterFormDropdownReady(ENCOUNTER_STATUS_WIDGET)
+                        && encounterFormDropdownShowsValue(
+                                ENCOUNTER_CLASS_WIDGET, ENCOUNTER_CLASS_SELECT_ID, classValue));
+                selectEncounterFormDropdown(
+                        wait, ENCOUNTER_STATUS_WIDGET, ENCOUNTER_STATUS_SELECT_ID, encounterStatus.trim());
+                System.out.println("Encounter: Encounter Status selected.");
+            }
+        } else {
+            String encounterStatus = mapGet(fields, "Encounter Status");
+            if (encounterStatus != null && !encounterStatus.isBlank()) {
+                selectEncounterFormDropdown(
+                        wait, ENCOUNTER_STATUS_WIDGET, ENCOUNTER_STATUS_SELECT_ID, encounterStatus.trim());
+                System.out.println("Encounter: Encounter Status selected.");
+            }
+        }
     }
 
-    private void setEncounterTextInputNearLabel(WebElement input, String value) {
-        scrollToElement(input);
-        input.click();
+    private void setEncounterTextInputWithRetry(WebElement input, String value) {
+        for (int attempt = 0; attempt < 3; attempt++) {
+            try {
+                scrollToElement(input);
+                input.click();
+                try {
+                    input.clear();
+                    input.sendKeys(value);
+                } catch (org.openqa.selenium.InvalidElementStateException e) {
+                    ((JavascriptExecutor) driver).executeScript(
+                            "arguments[0].value = arguments[1]; arguments[0].dispatchEvent(new Event('input', {bubbles:true}));"
+                                    + "arguments[0].dispatchEvent(new Event('change', {bubbles:true}));",
+                            input, value);
+                }
+                try {
+                    input.sendKeys(Keys.TAB);
+                } catch (Exception ignored) {}
+                ((JavascriptExecutor) driver).executeScript("document.body.click();");
+                return;
+            } catch (StaleElementReferenceException e) {
+                System.out.println("Stale element on text input, re-finding...");
+            }
+        }
+    }
+
+    private void encounterAutocompleteWithRetry(WebDriverWait wait, String labelContains, String typeText) {
+        org.openqa.selenium.TimeoutException lastTimeout = null;
+        for (int attempt = 0; attempt < 3; attempt++) {
+            try {
+                doEncounterAutocomplete(wait, labelContains, typeText);
+                return;
+            } catch (StaleElementReferenceException
+                    | org.openqa.selenium.TimeoutException
+                    | InvalidElementStateException e) {
+                lastTimeout = e instanceof org.openqa.selenium.TimeoutException
+                        ? (org.openqa.selenium.TimeoutException) e : lastTimeout;
+                System.out.println("Retry autocomplete for " + labelContains + " (attempt " + (attempt + 1) + ")...");
+                dismissVisibleAutocompletePanelsIfPresent();
+            }
+        }
+        if (lastTimeout != null) {
+            throw lastTimeout;
+        }
+    }
+
+    private void clearEncounterAutocompleteInput(WebElement input) {
         try {
             input.clear();
-            input.sendKeys(value);
-        } catch (org.openqa.selenium.InvalidElementStateException e) {
+        } catch (InvalidElementStateException e) {
             ((JavascriptExecutor) driver).executeScript(
-                    "arguments[0].value = arguments[1]; arguments[0].dispatchEvent(new Event('input', {bubbles:true}));"
-                            + "arguments[0].dispatchEvent(new Event('change', {bubbles:true}));",
-                    input, value);
+                    "arguments[0].value = ''; arguments[0].dispatchEvent(new Event('input', {bubbles:true}));", input);
         }
-        // Close datepicker/popups that can block next field clicks (e.g. Location).
+    }
+
+    private void doEncounterAutocomplete(WebDriverWait wait, String labelContains, String typeText) {
+        By preferredBy;
+        if ("Location".equalsIgnoreCase(labelContains)) {
+            preferredBy = encounterLocationInput;
+        } else if ("Department".equalsIgnoreCase(labelContains)) {
+            preferredBy = encounterDepartmentInput;
+        } else {
+            preferredBy = encounterAttendingClinicianInput;
+        }
+        WebElement input = findEncounterVisibleInputWithFallback(wait, preferredBy, labelContains);
+        scrollToElement(input);
         try {
-            input.sendKeys(Keys.TAB);
-        } catch (Exception ignored) {
-            // ignore
+            input.click();
+        } catch (ElementClickInterceptedException | StaleElementReferenceException e) {
+            input = findEncounterVisibleInputWithFallback(wait, preferredBy, labelContains);
+            scrollToElement(input);
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", input);
         }
-        ((JavascriptExecutor) driver).executeScript("document.body.click();");
-        sleepQuietMs(120);
+        dismissVisibleAutocompletePanels();
+        clearEncounterAutocompleteInput(input);
+        try {
+            input.sendKeys(typeText);
+        } catch (ElementNotInteractableException e) {
+            input = findEncounterVisibleInputWithFallback(wait, preferredBy, labelContains);
+            scrollToElement(input);
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", input);
+            clearEncounterAutocompleteInput(input);
+            input.sendKeys(typeText);
+        }
+        String trimmed = typeText.trim();
+        By panelBy = By.xpath("//*[contains(@class,'ui-autocomplete-panel')]");
+        WebDriverWait rowWait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        WebElement row = rowWait.until(d -> {
+            List<WebElement> panels = d.findElements(panelBy);
+            for (int i = panels.size() - 1; i >= 0; i--) {
+                WebElement panel = panels.get(i);
+                try {
+                    if (!panel.isDisplayed()) {
+                        continue;
+                    }
+                    WebElement match = findMatchingAutocompleteRowInPanel(panel, trimmed);
+                    if (match != null) {
+                        return match;
+                    }
+                } catch (StaleElementReferenceException ignored) {
+                    // panel rerendered; try next
+                }
+            }
+            return null;
+        });
+        clickListOption(row);
+        try {
+            new WebDriverWait(driver, Duration.ofSeconds(5))
+                    .until(ExpectedConditions.invisibilityOfElementLocated(panelBy));
+        } catch (org.openqa.selenium.TimeoutException ignored) {
+            // overlay may stay in DOM hidden
+        }
+        dismissVisibleAutocompletePanels();
+        System.out.println("Encounter: " + labelContains + " selected.");
+    }
+
+    /**
+     * Encounter Class / Status use {@code encounterForm:*} PrimeFaces selectOneMenu (hidden {@code select} + visible label).
+     * Waits until the label or hidden select reflects the choice and the panel closes before returning.
+     */
+    private void selectEncounterFormDropdown(
+            WebDriverWait wait, String widgetBaseId, String hiddenSelectId, String visibleText) {
+        String expected = visibleText.trim();
+        dismissVisibleAutocompletePanels();
+        wait.until(d -> isEncounterFormDropdownReady(widgetBaseId));
+        if (encounterFormDropdownShowsValue(widgetBaseId, hiddenSelectId, expected)) {
+            return;
+        }
+        WebDriverWait confirmWait = new WebDriverWait(driver, Duration.ofSeconds(20));
+        String panelDomId = widgetBaseId + "_panel";
+        for (int attempt = 0; attempt < 3; attempt++) {
+            if (encounterFormDropdownShowsValue(widgetBaseId, hiddenSelectId, expected)) {
+                return;
+            }
+            try {
+                selectSelectOneMenuOption(widgetBaseId, expected);
+            } catch (Exception e) {
+                System.out.println("Encounter dropdown " + widgetBaseId + ": selectOneMenu click failed (attempt "
+                        + (attempt + 1) + ").");
+            }
+            try {
+                waitForSelectOneMenuPanelClosed(panelDomId);
+                waitForEncounterFormDropdownValue(confirmWait, widgetBaseId, hiddenSelectId, expected);
+                dismissVisibleAutocompletePanels();
+                return;
+            } catch (org.openqa.selenium.TimeoutException e) {
+                System.out.println("Encounter dropdown " + widgetBaseId + " not confirmed, retry...");
+                dismissVisibleAutocompletePanelsIfPresent();
+            }
+        }
+        if (!encounterFormDropdownShowsValue(widgetBaseId, hiddenSelectId, expected)) {
+            System.out.println("Encounter dropdown " + widgetBaseId + ": using JS on hidden select.");
+            selectEncounterFormDropdownViaJsNativeSelect(hiddenSelectId, expected);
+        }
+        waitForSelectOneMenuPanelClosed(panelDomId);
+        waitForEncounterFormDropdownValue(confirmWait, widgetBaseId, hiddenSelectId, expected);
+        dismissVisibleAutocompletePanels();
+    }
+
+    private boolean isEncounterFormDropdownReady(String widgetBaseId) {
+        try {
+            WebElement widget = driver.findElement(By.id(widgetBaseId));
+            if (!widget.isDisplayed()) {
+                return false;
+            }
+            String cls = widget.getAttribute("class");
+            if (cls != null && cls.contains("ui-state-disabled")) {
+                return false;
+            }
+            WebElement label = driver.findElement(By.id(widgetBaseId + "_label"));
+            return label.isDisplayed();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private boolean encounterFormDropdownShowsValue(String widgetBaseId, String hiddenSelectId, String expected) {
+        if (isSelectOneMenuAlreadySet(widgetBaseId, expected)) {
+            return true;
+        }
+        try {
+            WebElement select = driver.findElement(By.id(hiddenSelectId));
+            String text = new Select(select).getFirstSelectedOption().getText();
+            if (text == null) {
+                return false;
+            }
+            String t = text.replace('\u00a0', ' ').trim();
+            return optionMatchesDropdownValue(t, expected) || t.equalsIgnoreCase(expected.trim());
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private void waitForEncounterFormDropdownValue(
+            WebDriverWait wait, String widgetBaseId, String hiddenSelectId, String expected) {
+        wait.until(d -> encounterFormDropdownShowsValue(widgetBaseId, hiddenSelectId, expected));
+    }
+
+    private void waitForSelectOneMenuPanelClosed(String panelDomId) {
+        try {
+            new WebDriverWait(driver, Duration.ofSeconds(8))
+                    .until(d -> !isSelectOneMenuPanelVisible(panelDomId));
+        } catch (org.openqa.selenium.TimeoutException ignored) {
+            // panel may already be gone from DOM
+        }
+    }
+
+    /** PrimeFaces hides the native {@code select}; set value via JS and fire change. */
+    private void selectEncounterFormDropdownViaJsNativeSelect(String hiddenSelectId, String visibleText) {
+        WebElement select = driver.findElement(By.id(hiddenSelectId));
+        scrollToElement(select);
+        String wanted = visibleText.trim();
+        Boolean matched = (Boolean) ((JavascriptExecutor) driver).executeScript(
+                "var sel = arguments[0];"
+                        + "var want = arguments[1].toLowerCase().replace(/\\s+/g, ' ').trim();"
+                        + "for (var i = 0; i < sel.options.length; i++) {"
+                        + "  var opt = sel.options[i];"
+                        + "  var text = (opt.text || '').replace(/\\s+/g, ' ').trim().toLowerCase();"
+                        + "  if (text === want || text.indexOf(want) >= 0 || want.indexOf(text) >= 0) {"
+                        + "    sel.value = opt.value;"
+                        + "    sel.selectedIndex = i;"
+                        + "    sel.dispatchEvent(new Event('change', {bubbles: true}));"
+                        + "    return true;"
+                        + "  }"
+                        + "}"
+                        + "return false;",
+                select,
+                wanted);
+        if (matched == null || !matched) {
+            throw new org.openqa.selenium.NoSuchElementException(
+                    "No option matching '" + visibleText + "' in select " + hiddenSelectId);
+        }
+    }
+
+    private void dismissVisibleAutocompletePanelsIfPresent() {
+        By panelBy = By.xpath("//*[contains(@class,'ui-autocomplete-panel')]");
+        boolean dismissed = false;
+        for (WebElement panel : driver.findElements(panelBy)) {
+            try {
+                if (panel.isDisplayed()) {
+                    ((JavascriptExecutor) driver).executeScript("document.body.click();");
+                    dismissed = true;
+                    break;
+                }
+            } catch (StaleElementReferenceException ignored) {
+                // try next panel
+            }
+        }
+        if (dismissed) {
+            sleepQuietMs(150);
+        }
+    }
+
+    private void dismissVisibleAutocompletePanels() {
+        By panelBy = By.xpath("//*[contains(@class,'ui-autocomplete-panel')]");
+        for (WebElement panel : driver.findElements(panelBy)) {
+            try {
+                if (panel.isDisplayed()) {
+                    ((JavascriptExecutor) driver).executeScript("document.body.click();");
+                    break;
+                }
+            } catch (StaleElementReferenceException ignored) {
+                // retry
+            }
+        }
+    }
+
+    private void selectEncounterSelectOneWithRetry(WebDriverWait wait, String widgetId, String labelContains, String optionMatch) {
+        for (int attempt = 0; attempt < 3; attempt++) {
+            try {
+                doSelectEncounterSelectOne(wait, widgetId, labelContains, optionMatch);
+                return;
+            } catch (StaleElementReferenceException | org.openqa.selenium.NoSuchElementException
+                    | org.openqa.selenium.TimeoutException e) {
+                System.out.println("Retry selectOne for " + labelContains + " (attempt " + (attempt + 1) + ")...");
+                dismissVisibleAutocompletePanels();
+            }
+        }
+    }
+
+    private void doSelectEncounterSelectOne(WebDriverWait wait, String widgetId, String labelContains, String optionMatch) {
+        dismissVisibleAutocompletePanels();
+        if (widgetId != null && !widgetId.isBlank()) {
+            List<WebElement> widgets = driver.findElements(By.id(widgetId));
+            for (WebElement widget : widgets) {
+                try {
+                    if (widget.isDisplayed()) {
+                        scrollToElement(widget);
+                        selectSelectOneMenuOption(widgetId, optionMatch);
+                        return;
+                    }
+                } catch (Exception ignored) {
+                    // try label fallback
+                }
+            }
+            if (!widgets.isEmpty()) {
+                try {
+                    WebElement widget = new WebDriverWait(driver, Duration.ofSeconds(3))
+                            .until(ExpectedConditions.visibilityOfElementLocated(By.id(widgetId)));
+                    scrollToElement(widget);
+                    selectSelectOneMenuOption(widgetId, optionMatch);
+                    return;
+                } catch (org.openqa.selenium.TimeoutException ignored) {
+                    // resolve widget near label text inside Encounter block
+                }
+            }
+        }
+        selectEncounterSelectOneNearLabel(wait, labelContains, optionMatch);
     }
 
     private WebElement findEncounterVisibleInputWithFallback(WebDriverWait wait, By preferredBy, String labelContains) {
@@ -1071,48 +1559,47 @@ public class LoginPage {
         }
         WebElement input = findEncounterVisibleInputWithFallback(wait, preferredBy, labelContains);
         scrollToElement(input);
-        try {
-            input.click();
-        } catch (ElementClickInterceptedException e) {
-            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", input);
+        // Re-find if stale (page DOM updates after autocomplete selections)
+        for (int attempt = 0; attempt < 3; attempt++) {
+            try {
+                input.click();
+                break;
+            } catch (StaleElementReferenceException e) {
+                input = findEncounterVisibleInputWithFallback(wait, preferredBy, labelContains);
+                scrollToElement(input);
+            }
         }
         input.clear();
         input.sendKeys(typeText);
-        sleepQuietMs(450);
-        String want = typeText.trim();
-        WebElement panel = wait.until(d -> {
-            List<WebElement> panels = d.findElements(By.xpath("//div[contains(@class,'ui-autocomplete-panel')]"));
-            for (int i = panels.size() - 1; i >= 0; i--) {
-                WebElement p = panels.get(i);
-                try {
-                    if (p.isDisplayed()) {
-                        return p;
+        // Wait up to 15s for autocomplete panel to appear
+        // Use * to match both <div> and <span> (PrimeFaces can render as either)
+        By panelBy = By.xpath("//*[contains(@class,'ui-autocomplete-panel')]");
+        WebElement panel = wait.withTimeout(Duration.ofSeconds(15))
+                .until(d -> {
+                    List<WebElement> panels = d.findElements(panelBy);
+                    for (WebElement p : panels) {
+                        try {
+                            if (p.isDisplayed() && p.isEnabled()) return p;
+                        } catch (StaleElementReferenceException ignored) {}
                     }
-                } catch (StaleElementReferenceException ignored) {
-                    // next
-                }
-            }
-            return null;
-        });
-        wait.until(ExpectedConditions.visibilityOf(panel));
-        List<WebElement> cells = panel.findElements(By.xpath(".//td | .//li"));
-        for (WebElement cell : cells) {
-            try {
-                if (!cell.isDisplayed()) {
-                    continue;
-                }
-                String t = cell.getText();
-                if (t != null && t.replace('\u00a0', ' ').trim().contains(want)) {
-                    clickListOption(cell);
-                    sleepQuietMs(300);
-                    return;
-                }
-            } catch (StaleElementReferenceException ignored) {
-                // next cell
-            }
-        }
-        throw new org.openqa.selenium.NoSuchElementException(
-                "Autocomplete (\"" + labelContains + "\"): no suggestion row contains: " + want);
+                    return null;
+                });
+        // Find the <tr> row directly by data-item-label attribute
+        String trimmed = typeText.trim();
+        By rowBy = By.xpath(
+                ".//tr[@data-item-label='" + trimmed + "' and @role='option']");
+        WebElement row = wait.withTimeout(Duration.ofSeconds(5))
+                .until(d -> {
+                    List<WebElement> rows = panel.findElements(rowBy);
+                    for (WebElement r : rows) {
+                        try {
+                            if (r.isDisplayed()) return r;
+                        } catch (StaleElementReferenceException ignored) {}
+                    }
+                    return null;
+                });
+        row.click();
+        sleepQuietMs(200);
     }
 
     private void selectEncounterSelectOneByKnownWidgetOrLabel(
@@ -1169,15 +1656,6 @@ public class LoginPage {
             }
             return null;
         });
-    }
-
-    public void selectEncounterTypeHome() {
-        // Click the dropdown icon (not just the div)
-        WebElement dropdownIcon = driver.findElement(encounterTypeDropdown);
-        ((JavascriptExecutor) driver).executeScript("arguments[0].click();", dropdownIcon);
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(3));
-        wait.until(ExpectedConditions.visibilityOfElementLocated(encounterTypeHomeOption));
-        driver.findElement(encounterTypeHomeOption).click();
     }
 
     public void enterLocation() {
@@ -1268,7 +1746,262 @@ public class LoginPage {
     }
 
     public void clickDiagnosisAndInterventions() {
-        driver.findElement(diagnosisAndInterventionsLink).click();
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        WebElement link = wait.until(ExpectedConditions.elementToBeClickable(diagnosisAndInterventionsLink));
+        scrollToElement(link);
+        link.click();
+        wait.until(ExpectedConditions.visibilityOfElementLocated(activityCodeInput));
+    }
+
+    private static By activityRowActionsMenuButton(int rowIndex) {
+        int row = rowIndex + 1;
+        return By.xpath("//tbody[contains(@id,'AccumedHaadActivityListForm:datalist')]"
+                + "//tr[" + row + "]//button[.//span[contains(@class,'pi-ellipsis-v')]]");
+    }
+
+    private static String activityMenuActionIdSuffix(String menuItemText) {
+        return switch (menuItemText.trim().toLowerCase()) {
+            case "edit" -> "editButton";
+            case "exclude" -> "excludeButton";
+            case "delete" -> "deleteButton";
+            default -> menuItemText.trim();
+        };
+    }
+
+    private static By activityRowMenuActionLink(int rowIndex, String menuItemText) {
+        String suffix = activityMenuActionIdSuffix(menuItemText);
+        return By.id("AccumedHaadActivityListForm:datalist:" + rowIndex + ":" + suffix);
+    }
+
+    private static By activityMenuItemLink(String menuItemText) {
+        String label = menuItemText.trim().replace("\\", "\\\\").replace("'", "\\'");
+        return By.xpath("//a[contains(@class,'ui-menuitem-link')]"
+                + "[.//span[contains(@class,'ui-menuitem-text') and normalize-space()=\"" + label + "\"]]");
+    }
+
+    /**
+     * Opens row actions (⋮) then selects a menu item (Edit, Exclude, Delete, …).
+     */
+    public void editActivityInDiagnosisTab(Map<String, String> fields) {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        clickDiagnosisAndInterventions();
+        int rowIndex = 0;
+        String rowStr = mapGet(fields, "Row Index");
+        if (rowStr != null && !rowStr.isBlank()) {
+            rowIndex = Integer.parseInt(rowStr.trim());
+        }
+        String menuItem = mapGet(fields, "Menu Item");
+        if (menuItem == null || menuItem.isBlank()) {
+            menuItem = "Edit";
+        }
+        clickActivityRowActionsMenu(wait, rowIndex);
+        clickActivityMenuItem(wait, rowIndex, menuItem.trim());
+        fillEditActivityDetails(wait, fields);
+    }
+
+    public void clickActivityRowActionsMenu(WebDriverWait wait, int rowIndex) {
+        WebElement btn = wait.until(ExpectedConditions.elementToBeClickable(activityRowActionsMenuButton(rowIndex)));
+        scrollToElement(btn);
+        try {
+            btn.click();
+        } catch (ElementClickInterceptedException e) {
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", btn);
+        }
+        sleepQuietMs(400);
+        System.out.println("Activity: opened actions menu for row " + rowIndex + ".");
+    }
+
+    public void clickActivityMenuItem(WebDriverWait wait, int rowIndex, String menuItemText) {
+        By idBy = activityRowMenuActionLink(rowIndex, menuItemText);
+        WebElement item;
+        try {
+            item = wait.until(ExpectedConditions.elementToBeClickable(idBy));
+        } catch (org.openqa.selenium.TimeoutException e) {
+            By itemBy = activityMenuItemLink(menuItemText);
+            item = wait.until(d -> {
+                for (WebElement link : d.findElements(itemBy)) {
+                    try {
+                        if (link.isDisplayed()) {
+                            return link;
+                        }
+                    } catch (StaleElementReferenceException ignored) {
+                        // next
+                    }
+                }
+                return null;
+            });
+        }
+        scrollToElement(item);
+        try {
+            item.click();
+        } catch (ElementClickInterceptedException e) {
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", item);
+        }
+        System.out.println("Activity: clicked menu item '" + menuItemText + "'.");
+    }
+
+    /** Edit-mode fields: Order Status ({@code activityOrderStatusEditMode}). */
+    public void fillEditActivityDetails(WebDriverWait wait, Map<String, String> fields) {
+        String orderStatus = mapGet(fields, "Order Status");
+        if (orderStatus != null && !orderStatus.isBlank()) {
+            wait.until(ExpectedConditions.visibilityOfElementLocated(By.id(ACTIVITY_ORDER_STATUS_EDIT_WIDGET)));
+            selectSelectOneMenuOption(ACTIVITY_ORDER_STATUS_EDIT_WIDGET, orderStatus.trim());
+            System.out.println("Activity edit: Order Status selected -> " + orderStatus.trim());
+        }
+    }
+
+    /**
+     * Medical Services row on Diagnosis and Interventions — keys: Activity Type, Code, Date (case-insensitive).
+     * Order Status is filled in edit mode via {@link #fillEditActivityDetails}.
+     */
+    public void fillMandatoryAddServiceDetails(Map<String, String> fields) {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        wait.until(ExpectedConditions.visibilityOfElementLocated(activityCodeInput));
+        scrollToElement(driver.findElement(activityCodeInput));
+
+        String activityType = mapGet(fields, "Activity Type");
+        if (activityType != null && !activityType.isBlank()) {
+            selectEncounterFormDropdown(wait, ACTIVITY_TYPE_WIDGET, ACTIVITY_TYPE_SELECT_ID, activityType.trim());
+            wait.until(d -> {
+                try {
+                    WebElement codeInput = d.findElement(activityCodeInput);
+                    return codeInput.isDisplayed() && codeInput.isEnabled();
+                } catch (Exception e) {
+                    return false;
+                }
+            });
+            System.out.println("Add Service: Activity Type selected.");
+        }
+        String code = mapGet(fields, "Code");
+        if (code != null && !code.isBlank()) {
+            activityCodeAutocompleteWithRetry(wait, code.trim());
+        }
+        String date = mapGet(fields, "Date");
+        if (date != null && !date.isBlank()) {
+            WebElement dateInput = wait.until(ExpectedConditions.elementToBeClickable(activityStartDateInput));
+            setEncounterTextInputWithRetry(dateInput, date.trim());
+            System.out.println("Add Service: Date filled.");
+        }
+    }
+
+    private void activityCodeAutocompleteWithRetry(WebDriverWait wait, String typeText) {
+        org.openqa.selenium.TimeoutException lastTimeout = null;
+        for (int attempt = 0; attempt < 3; attempt++) {
+            try {
+                doActivityCodeAutocomplete(wait, typeText);
+                return;
+            } catch (StaleElementReferenceException
+                    | org.openqa.selenium.TimeoutException
+                    | ElementNotInteractableException e) {
+                lastTimeout = e instanceof org.openqa.selenium.TimeoutException
+                        ? (org.openqa.selenium.TimeoutException) e : lastTimeout;
+                System.out.println("Retry Activity Code autocomplete (attempt " + (attempt + 1) + ")...");
+                dismissVisibleAutocompletePanelsIfPresent();
+            }
+        }
+        if (lastTimeout != null) {
+            throw lastTimeout;
+        }
+    }
+
+    private void doActivityCodeAutocomplete(WebDriverWait wait, String typeText) {
+        dismissVisibleAutocompletePanels();
+        WebElement input = wait.until(ExpectedConditions.elementToBeClickable(activityCodeInput));
+        scrollToElement(input);
+        try {
+            input.click();
+        } catch (ElementClickInterceptedException | StaleElementReferenceException e) {
+            input = wait.until(ExpectedConditions.elementToBeClickable(activityCodeInput));
+            scrollToElement(input);
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", input);
+        }
+        try {
+            input.clear();
+        } catch (InvalidElementStateException | StaleElementReferenceException e) {
+            input = wait.until(ExpectedConditions.elementToBeClickable(activityCodeInput));
+            scrollToElement(input);
+        }
+        String searchText = typeText;
+        if (typeText.contains("|")) {
+            searchText = typeText.split("\\|", 2)[0].trim();
+        }
+        try {
+            input.sendKeys(searchText);
+        } catch (ElementNotInteractableException e) {
+            input = wait.until(ExpectedConditions.presenceOfElementLocated(activityCodeInput));
+            scrollToElement(input);
+            ((JavascriptExecutor) driver).executeScript(
+                    "arguments[0].removeAttribute('readonly'); arguments[0].focus();", input);
+            input.sendKeys(searchText);
+        }
+        By panelBy = By.xpath("//*[contains(@class,'ui-autocomplete-panel')]");
+        WebDriverWait rowWait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        WebElement row = rowWait.until(d -> {
+            List<WebElement> panels = d.findElements(panelBy);
+            for (int i = panels.size() - 1; i >= 0; i--) {
+                WebElement panel = panels.get(i);
+                try {
+                    if (!panel.isDisplayed()) {
+                        continue;
+                    }
+                    WebElement match = findMatchingAutocompleteRowInPanel(panel, typeText);
+                    if (match != null) {
+                        return match;
+                    }
+                } catch (StaleElementReferenceException ignored) {
+                    // panel rerendered
+                }
+            }
+            return null;
+        });
+        clickListOption(row);
+        dismissVisibleAutocompletePanels();
+        System.out.println("Add Service: Code selected.");
+    }
+
+    /** Shared autocomplete matcher for encounter clinicians and activity code rows. */
+    private WebElement findMatchingAutocompleteRowInPanel(WebElement panel, String typeText) {
+        List<WebElement> rows = panel.findElements(By.xpath(".//tr[@role='option']"));
+        if (rows.isEmpty()) {
+            rows = panel.findElements(By.xpath(".//tr[contains(@class,'ui-autocomplete-row')]"));
+        }
+        if (rows.isEmpty()) {
+            rows = panel.findElements(By.xpath(".//tbody/tr"));
+        }
+        if (rows.isEmpty()) {
+            rows = panel.findElements(By.xpath(".//li[@role='option']"));
+        }
+        for (WebElement row : rows) {
+            try {
+                if (!row.isDisplayed()) {
+                    continue;
+                }
+                String dataLabel = row.getAttribute("data-item-label");
+                if (dataLabel != null && optionMatchesDropdownValue(dataLabel, typeText)) {
+                    return row;
+                }
+                String rowText = row.getText();
+                if (rowText != null && optionMatchesDropdownValue(rowText, typeText)) {
+                    return row;
+                }
+                for (WebElement cell : row.findElements(By.xpath(".//td"))) {
+                    try {
+                        if (!cell.isDisplayed()) {
+                            continue;
+                        }
+                        String cellText = cell.getText();
+                        if (cellText != null && optionMatchesDropdownValue(cellText, typeText)) {
+                            return row;
+                        }
+                    } catch (StaleElementReferenceException ignored) {
+                        // next cell
+                    }
+                }
+            } catch (StaleElementReferenceException ignored) {
+                // next row
+            }
+        }
+        return null;
     }
 
     public boolean isAddBulkDiagnosisButtonDisplayed() {
@@ -1298,38 +2031,268 @@ public class LoginPage {
     }
 
     public void clickAddServiceButton() {
-        driver.findElement(addServiceButton).click();
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        WebElement btn = wait.until(ExpectedConditions.elementToBeClickable(addServiceButton));
+        scrollToElement(btn);
         try {
-            Thread.sleep(2000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+            btn.click();
+        } catch (ElementClickInterceptedException e) {
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", btn);
         }
     }
 
-    public boolean isCompletedTextDisplayed() {
-        return driver.findElement(completedText).isDisplayed();
+    private static String normalizeServiceCodeKey(String serviceCode) {
+        String code = serviceCode.trim();
+        int pipe = code.indexOf('|');
+        if (pipe >= 0) {
+            code = code.substring(0, pipe).trim();
+        }
+        return code;
     }
 
-    public void clickInsertVisitButton() {
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(5));
-        wait.until(ExpectedConditions.elementToBeClickable(insertVisitButton));
-        driver.findElement(insertVisitButton).click();
+    private static By serviceCodeInActivityDataListLabel(String serviceCode) {
+        String code = normalizeServiceCodeKey(serviceCode);
+        return By.xpath("//label[contains(@id,'AccumedHaadActivityListForm:datalist')]"
+                + "[contains(normalize-space(.), " + xpathLiteral(code) + ")]");
+    }
+
+    private static By growlTitleLocator(String message) {
+        return By.xpath("//span[contains(@class,'ui-growl-title')][normalize-space()=" + xpathLiteral(message.trim()) + "]");
+    }
+
+    /** Safe XPath string literal for arbitrary message/code text. */
+    private static String xpathLiteral(String value) {
+        if (!value.contains("'")) {
+            return "'" + value + "'";
+        }
+        if (!value.contains("\"")) {
+            return "\"" + value + "\"";
+        }
+        StringBuilder parts = new StringBuilder("concat(");
+        String remaining = value;
+        boolean first = true;
+        while (!remaining.isEmpty()) {
+            int quote = remaining.indexOf('\'');
+            String segment = quote >= 0 ? remaining.substring(0, quote) : remaining;
+            if (!segment.isEmpty()) {
+                if (!first) {
+                    parts.append(", ");
+                }
+                parts.append("'").append(segment).append("'");
+                first = false;
+            }
+            if (quote >= 0) {
+                if (!first) {
+                    parts.append(", ");
+                }
+                parts.append("\"'\"");
+                first = false;
+                remaining = remaining.substring(quote + 1);
+            } else {
+                remaining = "";
+            }
+        }
+        parts.append(")");
+        return parts.toString();
+    }
+
+    public void waitForServiceCodeInActivityList(String serviceCode) {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        wait.until(ExpectedConditions.visibilityOfElementLocated(serviceCodeInActivityDataListLabel(serviceCode)));
+    }
+
+    public boolean isServiceCodeDisplayedInActivityList(String serviceCode) {
+        return driver.findElement(serviceCodeInActivityDataListLabel(serviceCode)).isDisplayed();
+    }
+
+    public void clickUpdateVisitButton() {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        WebElement btn = wait.until(ExpectedConditions.elementToBeClickable(updateVisitButton));
+        scrollToElement(btn);
+        try {
+            btn.click();
+        } catch (ElementClickInterceptedException e) {
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", btn);
+        }
+    }
+
+    private static By buttonContainingText(String buttonText) {
+        return By.xpath("//button[contains(normalize-space(.), " + xpathLiteral(buttonText.trim()) + ")]");
+    }
+
+    /** Clicks any button whose visible text contains the given label (e.g. {@code Insert Visit}). */
+    public void clickButtonContainingText(String buttonText) {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        WebElement btn = wait.until(ExpectedConditions.elementToBeClickable(buttonContainingText(buttonText)));
+        scrollToElement(btn);
+        try {
+            btn.click();
+        } catch (ElementClickInterceptedException e) {
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", btn);
+        }
     }
 
     public void clickMarkAsReadyToBillButton() {
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(5));
-        wait.until(ExpectedConditions.elementToBeClickable(markAsReadyToBillButton));
-        driver.findElement(markAsReadyToBillButton).click();
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        WebElement btn = wait.until(ExpectedConditions.elementToBeClickable(markAsReadyToBillButton));
+        scrollToElement(btn);
         try {
-            Thread.sleep(3000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+            btn.click();
+        } catch (ElementClickInterceptedException e) {
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", btn);
+        }
+        waitForBlockingOverlaysToClose(new WebDriverWait(driver, Duration.ofSeconds(60)));
+        System.out.println("Clicked Mark As Ready To Bill.");
+    }
+
+    /** Waits for AJAX loader / status dialog overlay to disappear after Mark As Ready To Bill. */
+    private void waitForBlockingOverlaysToClose(WebDriverWait wait) {
+        try {
+            wait.until(d -> !isBlockingOverlayVisible());
+        } catch (org.openqa.selenium.TimeoutException e) {
+            dismissBlockingOverlays();
+        }
+        sleepQuietMs(500);
+    }
+
+    private boolean isBlockingOverlayVisible() {
+        By overlayBy = By.cssSelector(
+                "#statusDialog_modal, .ui-widget-overlay.ui-dialog-mask, .ui-blockui, .ui-blockui-document");
+        for (WebElement overlay : driver.findElements(overlayBy)) {
+            try {
+                if (overlay.isDisplayed()) {
+                    return true;
+                }
+            } catch (StaleElementReferenceException ignored) {
+                // continue
+            }
+        }
+        return false;
+    }
+
+    private void dismissBlockingOverlays() {
+        for (WebElement ok : driver.findElements(By.xpath(
+                "//div[contains(@id,'statusDialog')]//button[.//span[normalize-space()='OK']]"
+                        + " | //button[contains(@onclick,'statusDialog')][.//span[normalize-space()='OK']]"))) {
+            try {
+                if (ok.isDisplayed()) {
+                    ok.click();
+                    sleepQuietMs(500);
+                    return;
+                }
+            } catch (Exception ignored) {
+                // try next
+            }
+        }
+        try {
+            new WebDriverWait(driver, Duration.ofSeconds(3))
+                    .until(ExpectedConditions.invisibilityOfElementLocated(By.id("statusDialog_modal")));
+        } catch (org.openqa.selenium.TimeoutException ignored) {
+            ((JavascriptExecutor) driver).executeScript(
+                    "document.querySelectorAll('#statusDialog_modal,.ui-widget-overlay.ui-dialog-mask')"
+                            + ".forEach(function(el){el.style.display='none';});");
         }
     }
 
-    public void verifySuccessMessage() {
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(5));
-        wait.until(ExpectedConditions.visibilityOfElementLocated(successMessage));
+    private void clickElementWithJsFallback(WebElement element) {
+        scrollToElement(element);
+        try {
+            element.click();
+        } catch (ElementClickInterceptedException e) {
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", element);
+        }
+    }
+
+    public void navigateToBillManagementPage() {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        waitForBlockingOverlaysToClose(new WebDriverWait(driver, Duration.ofSeconds(30)));
+        WebElement billing = wait.until(ExpectedConditions.presenceOfElementLocated(billingMenuLink));
+        clickElementWithJsFallback(billing);
+        System.out.println("Clicked Billing menu.");
+        WebElement billMgmt = wait.until(ExpectedConditions.presenceOfElementLocated(billManagementMenuLink));
+        clickElementWithJsFallback(billMgmt);
+        System.out.println("Clicked Bill Management.");
+        wait.until(ExpectedConditions.visibilityOfElementLocated(By.id("phWLForm:phWLTbl_data")));
+    }
+
+    public void clickCreatedPatientInBillManagementList() {
+        String fullName = randomFirstName + " " + randomLastName;
+        By patientLink = By.xpath("//a[contains(@id,'patient_FullNameCol')][contains(normalize-space(.), "
+                + xpathLiteral(fullName) + ")]");
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        WebElement link = wait.until(ExpectedConditions.elementToBeClickable(patientLink));
+        scrollToElement(link);
+        try {
+            link.click();
+        } catch (ElementClickInterceptedException e) {
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", link);
+        }
+        System.out.println("Clicked patient in Bill Management: " + fullName);
+    }
+
+    public void clickGenerateBillButton() {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        WebElement btn = wait.until(ExpectedConditions.elementToBeClickable(generateBillButton));
+        scrollToElement(btn);
+        try {
+            btn.click();
+        } catch (ElementClickInterceptedException e) {
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", btn);
+        }
+        System.out.println("Clicked Generate Bill.");
+    }
+
+    public void clickAlertDialogOkButton() {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        WebElement ok = wait.until(ExpectedConditions.elementToBeClickable(alertDialogOkButton));
+        scrollToElement(ok);
+        try {
+            ok.click();
+        } catch (ElementClickInterceptedException e) {
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", ok);
+        }
+        System.out.println("Clicked alert OK.");
+    }
+
+    public void selectAllCategorizedBills() {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        WebElement box = wait.until(ExpectedConditions.elementToBeClickable(selectAllCategorizedBillsCheckbox));
+        scrollToElement(box);
+        try {
+            box.click();
+        } catch (ElementClickInterceptedException e) {
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", box);
+        }
+        System.out.println("Selected all categorized bills.");
+    }
+
+    public void clickAddPaymentButton() {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        WebElement btn = wait.until(ExpectedConditions.elementToBeClickable(addPaymentButton));
+        scrollToElement(btn);
+        try {
+            btn.click();
+        } catch (ElementClickInterceptedException e) {
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", btn);
+        }
+        System.out.println("Clicked Add Payment.");
+    }
+
+    public void clickPaymentSaveButton() {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        WebElement btn = wait.until(ExpectedConditions.elementToBeClickable(paymentSaveButton));
+        scrollToElement(btn);
+        try {
+            btn.click();
+        } catch (ElementClickInterceptedException e) {
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", btn);
+        }
+        System.out.println("Clicked payment Save.");
+    }
+
+    public void verifyGrowlSuccessMessage(String expectedMessage) {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        wait.until(ExpectedConditions.visibilityOfElementLocated(growlTitleLocator(expectedMessage)));
     }
 
     public void clickOkButton() {
