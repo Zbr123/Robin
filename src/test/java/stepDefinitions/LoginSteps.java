@@ -270,6 +270,11 @@ public class LoginSteps {
         System.out.println("Verified success message: " + expectedMessage);
     }
 
+    @Then("I should see the {string} error")
+    public void iShouldSeeTheError(String expectedError) {
+        loginPage.verifyErrorMessageDisplayed(expectedError);
+    }
+
     @When("I edit activity in Diagnosis and Interventions tab")
     public void iEditActivityInDiagnosisAndInterventionsTab(io.cucumber.datatable.DataTable dataTable) {
         LinkedHashMap<String, String> data = new LinkedHashMap<>();

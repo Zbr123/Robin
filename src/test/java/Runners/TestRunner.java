@@ -22,7 +22,7 @@ import io.cucumber.testng.AbstractTestNGCucumberTests;
 import io.cucumber.testng.CucumberOptions;
 
 @CucumberOptions(
-        features = "resources/Features",  // ✅ Matches your actual folder
+        features = "resources/Features/login.feature",
         glue = "stepDefinitions",
         plugin = {
                 "pretty",

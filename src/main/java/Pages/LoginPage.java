@@ -12,6 +12,7 @@ import java.util.Random;
 import org.openqa.selenium.Keys;
 
 import java.util.UUID;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
@@ -32,6 +33,7 @@ public class LoginPage {
     }
     private String randomFirstName;
     private String randomLastName;
+    private static String lastRegisteredMrn;
 
     // Locators
     /** Login screen ready: username field (works when heading text/markup differs per tenant). */
@@ -52,12 +54,15 @@ public class LoginPage {
 //    private By lastNameField = By.xpath("//input[@id='AccumedPatientCreateForm:patientSurname']");
     private By mrnField = By.xpath("//input[@name='AccumedPatientCreateForm:mrn']");
     private By communityMrnField = By.xpath("//input[@id='AccumedPatientCreateForm:communityMrn']");
-    private By nationalIdField = By.xpath("//input[@id='AccumedPatientCreateForm:emiratesId2']");
+    private By nationalIdField = By.id("AccumedPatientCreateForm:emiratesId2");
     private By firstNameField = By.xpath("//input[@id='AccumedPatientCreateForm:patientName']");
     private By lastNameField = By.xpath("//input[@id='AccumedPatientCreateForm:patientSurname']");
 
     private By dobField = By.xpath("//input[@id='AccumedPatientCreateForm:dateOfBirth2_input']");
-    private By qidExpiryDateInput = By.xpath("//input[@title=\"QID Expiry Date\"]");
+    private By qidExpiryDateInput = By.xpath(
+            "//input[@title='QID Expiry Date']"
+                    + " | //input[@id='AccumedPatientCreateForm:qidExpiryDate_input']"
+                    + " | //input[contains(@id,'AccumedPatientCreateForm') and contains(@id,'xpir') and contains(@class,'hasDatepicker')]");
     private By datepickerPanel = By.id("ui-datepicker-div");
     private By nationalityLabel = By.xpath("//label[@id='AccumedPatientCreateForm:nationality_label']");
     /** PrimeFaces selectOneMenu trigger (more reliable than label for opening the overlay). */
@@ -207,7 +212,33 @@ public class LoginPage {
 
     public void clickPatientAccess() {
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
-        WebElement link = wait.until(ExpectedConditions.elementToBeClickable(patientAccess));
+        By[] candidates = {
+                patientAccessScreen,
+                patientAccess,
+                By.xpath("//a[span[text()='Patient Access']]")
+        };
+        for (By by : candidates) {
+            List<WebElement> links = driver.findElements(by);
+            for (WebElement link : links) {
+                try {
+                    if (link.isDisplayed() && link.isEnabled()) {
+                        scrollToElement(link);
+                        try {
+                            link.click();
+                        } catch (ElementClickInterceptedException e) {
+                            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", link);
+                        }
+                        wait.until(ExpectedConditions.or(
+                                ExpectedConditions.visibilityOfElementLocated(newVisitButton),
+                                ExpectedConditions.visibilityOfElementLocated(patientAccess)));
+                        return;
+                    }
+                } catch (StaleElementReferenceException ignored) {
+                    // try next candidate
+                }
+            }
+        }
+        WebElement link = wait.until(ExpectedConditions.elementToBeClickable(patientAccessScreen));
         scrollToElement(link);
         link.click();
     }
@@ -219,7 +250,15 @@ public class LoginPage {
 
     // Method to click on New Visit button
     public void clickNewVisitButton() {
-        driver.findElement(newVisitButton).click();
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        WebElement btn = wait.until(ExpectedConditions.elementToBeClickable(newVisitButton));
+        scrollToElement(btn);
+        try {
+            btn.click();
+        } catch (ElementClickInterceptedException e) {
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", btn);
+        }
+        wait.until(ExpectedConditions.visibilityOfElementLocated(patientAndEncounterScreen));
     }
 
     // Method to verify "Patient and Encounter" screen is displayed
@@ -314,6 +353,7 @@ public class LoginPage {
 
         this.randomFirstName = randomFirstName;
         this.randomLastName = randomLastName;
+        lastRegisteredMrn = randomMRN;
     }
 
     /**
@@ -367,12 +407,67 @@ public class LoginPage {
     }
 
     private void typeQidExpiryDateDirect(int day, int month1Based, int year) {
-        String formatted = String.format("%02d/%02d/%04d", day, month1Based, year);
-        WebElement input = driver.findElement(qidExpiryDateInput);
+        setQidExpiryDate(String.format("%02d/%02d/%04d", day, month1Based, year));
+    }
+
+    /** Fills National ID (QID) and expiry after No QID checkbox is unchecked. */
+    public void fillPatientQid(String qidNumber, String expiryDateDdMmYyyy) {
+        waitForNationalIdFieldReady();
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        WebElement nationalIdInput = wait.until(ExpectedConditions.elementToBeClickable(nationalIdField));
+        scrollToElement(nationalIdInput);
+        nationalIdInput.click();
+        nationalIdInput.sendKeys(Keys.chord(Keys.CONTROL, "a"));
+        nationalIdInput.sendKeys(Keys.DELETE);
+        nationalIdInput.sendKeys(qidNumber);
+        nationalIdInput.sendKeys(Keys.TAB);
+        sleepQuietMs(600);
+        setQidExpiryDate(expiryDateDdMmYyyy);
+        System.out.println("Filled National ID (emiratesId2): " + qidNumber + ", expiry: " + expiryDateDdMmYyyy);
+    }
+
+    /** Waits until No QID is off and {@code emiratesId2} (National ID) is enabled. */
+    public void waitForNationalIdFieldReady() {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20));
+        wait.until(d -> {
+            WebElement noQid = d.findElement(By.id("AccumedPatientCreateForm:NoQIDCheck_input"));
+            if (noQid.isSelected()) {
+                return false;
+            }
+            WebElement nationalId = d.findElement(nationalIdField);
+            if (!nationalId.isDisplayed() || !nationalId.isEnabled()) {
+                return false;
+            }
+            String cssClass = nationalId.getAttribute("class");
+            return cssClass == null || !cssClass.contains("ui-state-disabled");
+        });
+    }
+
+    public void setQidExpiryDate(String expiryDateDdMmYyyy) {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        WebElement input = wait.until(d -> findVisibleQidExpiryInput(d));
         scrollToElement(input);
         input.click();
-        input.clear();
-        input.sendKeys(formatted);
+        input.sendKeys(Keys.chord(Keys.CONTROL, "a"));
+        input.sendKeys(Keys.DELETE);
+        input.sendKeys(expiryDateDdMmYyyy);
+        input.sendKeys(Keys.TAB);
+    }
+
+    private WebElement findVisibleQidExpiryInput(WebDriver driver) {
+        for (WebElement candidate : driver.findElements(qidExpiryDateInput)) {
+            try {
+                if (candidate.isDisplayed() && candidate.isEnabled()) {
+                    String cssClass = candidate.getAttribute("class");
+                    if (cssClass == null || !cssClass.contains("ui-state-disabled")) {
+                        return candidate;
+                    }
+                }
+            } catch (StaleElementReferenceException ignored) {
+                // try next candidate
+            }
+        }
+        return null;
     }
 
     public String getRandomFirstName() {
@@ -383,16 +478,25 @@ public class LoginPage {
         return randomLastName;
     }
 
+    public String getLastRegisteredMrn() {
+        return lastRegisteredMrn;
+    }
+
 
     public void selectNationalityAmerican() {
+        selectNationality("AMERICAN");
+    }
+
+    /** Opens nationality selectOneMenu and picks an option matching {@code searchText} (label or filter). */
+    public void selectNationality(String searchText) {
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
         WebElement opener = findNationalityDropdownOpener(wait);
         scrollToElement(opener);
         opener.click();
 
         WebElement panel = waitForVisibleNationalityPanel(wait);
-        tryApplyNationalityFilter(panel);
-        WebElement option = findAmericanOptionInsidePanel(panel, wait);
+        tryApplyNationalityFilter(panel, searchText);
+        WebElement option = findNationalityOptionInsidePanel(panel, wait, searchText);
         ((JavascriptExecutor) driver).executeScript(
                 "arguments[0].scrollIntoView({block:'center', inline:'nearest'});", option);
         clickListOption(option);
@@ -404,6 +508,87 @@ public class LoginPage {
             } catch (Exception ignored) {
                 // panel may stay in DOM with display:none
             }
+        }
+    }
+
+    /** Create Patient form — selectOneMenu by label text or numeric list index. */
+    public void selectCreatePatientDropdown(String widgetBaseId, String optionMatch) {
+        if (optionMatch == null || optionMatch.isBlank()) {
+            return;
+        }
+        if (optionMatch.matches("\\d+")) {
+            selectSelectOneMenuByIndexWithRetry(widgetBaseId, Integer.parseInt(optionMatch));
+        } else {
+            selectSelectOneMenuOptionWithRetry(widgetBaseId, optionMatch);
+        }
+    }
+
+    /** Select first dropdown row whose label/text contains {@code keyword} (case-insensitive). */
+    public void selectCreatePatientDropdownContaining(String widgetBaseId, String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return;
+        }
+        org.openqa.selenium.TimeoutException lastTimeout = null;
+        String needle = keyword.trim().toLowerCase();
+        for (int attempt = 0; attempt < 3; attempt++) {
+            try {
+                WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20));
+                openSelectOneMenuPanel(widgetBaseId, wait);
+                String panelDomId = widgetBaseId + "_panel";
+                wait.until(d -> selectOneMenuPanelHasVisibleItems(panelDomId));
+                WebElement panel = findDisplayedPanelById(panelDomId);
+                for (WebElement li : findSelectOneMenuListItems(panel)) {
+                    if (!li.isDisplayed()) {
+                        continue;
+                    }
+                    String dataLabel = li.getAttribute("data-label");
+                    String text = li.getText();
+                    String combined = ((dataLabel != null ? dataLabel : "") + " " + (text != null ? text : ""))
+                            .toLowerCase();
+                    if (combined.contains(needle)) {
+                        clickListOption(li);
+                        return;
+                    }
+                }
+                throw new org.openqa.selenium.NoSuchElementException(
+                        "No option containing '" + keyword + "' in " + widgetBaseId);
+            } catch (org.openqa.selenium.TimeoutException | StaleElementReferenceException e) {
+                lastTimeout = e instanceof org.openqa.selenium.TimeoutException
+                        ? (org.openqa.selenium.TimeoutException) e : lastTimeout;
+                dismissVisibleAutocompletePanelsIfPresent();
+                sleepQuietMs(600);
+            }
+        }
+        if (lastTimeout != null) {
+            throw lastTimeout;
+        }
+    }
+
+    private void selectSelectOneMenuByIndexWithRetry(String widgetBaseId, int index) {
+        org.openqa.selenium.TimeoutException lastTimeout = null;
+        for (int attempt = 0; attempt < 3; attempt++) {
+            try {
+                WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20));
+                openSelectOneMenuPanel(widgetBaseId, wait);
+                String panelDomId = widgetBaseId + "_panel";
+                wait.until(d -> selectOneMenuPanelHasVisibleItems(panelDomId));
+                WebElement panel = findDisplayedPanelById(panelDomId);
+                List<WebElement> items = findSelectOneMenuListItems(panel);
+                if (index >= items.size()) {
+                    throw new org.openqa.selenium.NoSuchElementException(
+                            "Index " + index + " out of range for " + widgetBaseId + " (" + items.size() + " items)");
+                }
+                clickListOption(items.get(index));
+                return;
+            } catch (org.openqa.selenium.TimeoutException | StaleElementReferenceException e) {
+                lastTimeout = e instanceof org.openqa.selenium.TimeoutException
+                        ? (org.openqa.selenium.TimeoutException) e : lastTimeout;
+                dismissVisibleAutocompletePanelsIfPresent();
+                sleepQuietMs(600);
+            }
+        }
+        if (lastTimeout != null) {
+            throw lastTimeout;
         }
     }
 
@@ -429,29 +614,32 @@ public class LoginPage {
         }
     }
 
-    private void tryApplyNationalityFilter(WebElement panel) {
+    private void tryApplyNationalityFilter(WebElement panel, String filterText) {
         try {
             WebElement filter = panel.findElement(By.cssSelector("input.ui-selectonemenu-filter"));
             if (filter.isDisplayed()) {
                 filter.clear();
-                filter.sendKeys("AMERIC");
+                filter.sendKeys(filterText.length() >= 3 ? filterText.substring(0, 3) : filterText);
             }
         } catch (org.openqa.selenium.NoSuchElementException ignored) {
             // no filter on this selectOneMenu
         }
     }
 
-    private WebElement findAmericanOptionInsidePanel(WebElement panel, WebDriverWait wait) {
+    private void tryApplyNationalityFilter(WebElement panel) {
+        tryApplyNationalityFilter(panel, "AMERIC");
+    }
+
+    private WebElement findNationalityOptionInsidePanel(WebElement panel, WebDriverWait wait, String searchText) {
+        String needle = searchText.trim();
         String[] relativeXpaths = {
-                ".//li[@data-label='AMERICAN']",
-                ".//li[@data-label='American']",
-                ".//*[@role='option' and @data-label='AMERICAN']",
-                ".//li[contains(@class,'ui-selectonemenu-item')][normalize-space(.)='AMERICAN']",
+                ".//li[@data-label=" + xpathLiteral(needle) + "]",
+                ".//li[contains(@data-label," + xpathLiteral(needle) + ")]",
+                ".//li[contains(normalize-space(.)," + xpathLiteral(needle) + ")]",
         };
         for (String rel : relativeXpaths) {
             try {
-                List<WebElement> candidates = panel.findElements(By.xpath(rel));
-                for (WebElement li : candidates) {
+                for (WebElement li : panel.findElements(By.xpath(rel))) {
                     if (li.isDisplayed()) {
                         return li;
                     }
@@ -461,16 +649,15 @@ public class LoginPage {
             }
         }
         return wait.until(drv -> {
-            List<WebElement> all = panel.findElements(By.xpath(".//li[contains(@class,'ui-selectonemenu-item')]"));
-            for (WebElement li : all) {
+            for (WebElement li : panel.findElements(By.xpath(".//li[contains(@class,'ui-selectonemenu-item')]"))) {
                 if (!li.isDisplayed()) {
                     continue;
                 }
                 String dl = li.getAttribute("data-label");
-                if (dl != null && dl.equalsIgnoreCase("AMERICAN")) {
+                if (dl != null && dl.toLowerCase().contains(needle.toLowerCase())) {
                     return li;
                 }
-                if ("AMERICAN".equalsIgnoreCase(li.getText().trim())) {
+                if (li.getText().trim().toLowerCase().contains(needle.toLowerCase())) {
                     return li;
                 }
             }
@@ -500,6 +687,11 @@ public class LoginPage {
         WebElement button = waitForElementToBeClickable(addInsuranceCardButton);
         scrollToElement(button);
         button.click();
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20));
+        wait.until(ExpectedConditions.or(
+                ExpectedConditions.visibilityOfElementLocated(addInsuranceModalReceiverLabel),
+                ExpectedConditions.presenceOfElementLocated(
+                        By.xpath("//*[contains(@id,'AccumedPatientInsuranceCreateForm')]"))));
     }
 
     /**
@@ -510,8 +702,15 @@ public class LoginPage {
      * strings ({@code 0000}–{@code 9999}) each run; table values for those keys are ignored.
      */
     public void fillAddInsuranceModalMandatoryFields(Map<String, String> fields) {
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
-        wait.until(ExpectedConditions.visibilityOfElementLocated(addInsuranceModalReceiverLabel));
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20));
+        wait.until(ExpectedConditions.or(
+                ExpectedConditions.visibilityOfElementLocated(addInsuranceModalReceiverLabel),
+                ExpectedConditions.presenceOfElementLocated(
+                        By.xpath("//*[contains(@id,'AccumedPatientInsuranceCreateForm')]"))));
+        if (driver.findElements(addInsuranceModalReceiverLabel).isEmpty()
+                || !driver.findElement(addInsuranceModalReceiverLabel).isDisplayed()) {
+            wait.until(ExpectedConditions.visibilityOfElementLocated(addInsuranceModalReceiverLabel));
+        }
 
         String randomMemberId = randomFourDigits();
         String randomPolicyNumber = randomFourDigitsDifferentFrom(randomMemberId);
@@ -639,6 +838,132 @@ public class LoginPage {
         WebElement save = waitForElementToBeClickable(saveInsuranceCardButton);
         scrollToElement(save);
         save.click();
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        try {
+            wait.until(ExpectedConditions.invisibilityOfElementLocated(addInsuranceModalReceiverLabel));
+        } catch (org.openqa.selenium.TimeoutException ignored) {
+            // modal may close without receiver label visibility change
+        }
+        sleepQuietMs(800);
+    }
+
+    public boolean isAddInsuranceModalDisplayed() {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+        try {
+            wait.until(ExpectedConditions.visibilityOfElementLocated(addInsuranceModalReceiverLabel));
+            return true;
+        } catch (org.openqa.selenium.TimeoutException e) {
+            return driver.findElements(By.xpath("//*[contains(@id,'AccumedPatientInsuranceCreateForm')]"))
+                    .stream().anyMatch(el -> {
+                        try {
+                            return el.isDisplayed();
+                        } catch (Exception ex) {
+                            return false;
+                        }
+                    });
+        }
+    }
+
+    /**
+     * Add Insurance modal — link baby to existing insured mother via Relationship = Child.
+     */
+    public void fillChildInsuranceLinkedToExistingPatient(String relationship, String existingPatientName) {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        wait.until(ExpectedConditions.presenceOfElementLocated(
+                By.xpath("//*[contains(@id,'AccumedPatientInsuranceCreateForm')]")));
+        selectInsuranceRelationship(wait, relationship);
+        linkExistingPatientInInsuranceModal(wait, existingPatientName);
+        System.out.println("Child insurance linked to patient: " + existingPatientName);
+    }
+
+    private void selectInsuranceRelationship(WebDriverWait wait, String relationship) {
+        String[] widgetIds = {
+                "AccumedPatientInsuranceCreateForm:relationshipId",
+                "AccumedPatientInsuranceCreateForm:relationship",
+                "AccumedPatientInsuranceCreateForm:patientRelationship",
+                "AccumedPatientInsuranceCreateForm:insuranceRelationship"
+        };
+        for (String widgetId : widgetIds) {
+            if (!driver.findElements(By.id(widgetId)).isEmpty()
+                    || !driver.findElements(By.id(widgetId + "_label")).isEmpty()) {
+                selectSelectOneMenuOptionWithRetry(widgetId, relationship);
+                return;
+            }
+        }
+        By labelNearRelationship = By.xpath(
+                "//*[contains(@id,'AccumedPatientInsuranceCreateForm')]"
+                        + "//label[contains(translate(normalize-space(.),'RELATIONSHIP','relationship'),'relationship')]"
+                        + "/following::*[contains(@class,'ui-selectonemenu')][1]//span[contains(@class,'ui-selectonemenu-label')]");
+        if (!driver.findElements(labelNearRelationship).isEmpty()) {
+            WebElement opener = wait.until(ExpectedConditions.elementToBeClickable(labelNearRelationship));
+            opener.click();
+            clickSelectOneMenuOptionByText(relationship, wait);
+        }
+    }
+
+    private void linkExistingPatientInInsuranceModal(WebDriverWait wait, String patientName) {
+        By[] candidateInputs = {
+                By.xpath("//input[contains(@id,'AccumedPatientInsuranceCreateForm') and contains(@class,'ui-autocomplete-input')]"),
+                By.xpath("//input[contains(@id,'AccumedPatientInsuranceCreateForm') and (contains(@id,'link')"
+                        + " or contains(@id,'guarantor') or contains(@id,'existing') or contains(@id,'Patient'))"
+                        + " and not(@type='hidden')]"),
+                By.xpath("//input[contains(@id,'AccumedPatientInsuranceCreateForm') and @type='text']")
+        };
+        WebElement input = null;
+        for (By by : candidateInputs) {
+            List<WebElement> fields = driver.findElements(by);
+            for (WebElement field : fields) {
+                try {
+                    if (field.isDisplayed() && field.isEnabled()) {
+                        String id = field.getAttribute("id");
+                        if (id != null && (id.contains("patientInsuranceId") || id.contains("policyNumber")
+                                || id.contains("insuranceLisence") || id.contains("startDate")
+                                || id.contains("endDate"))) {
+                            continue;
+                        }
+                        input = field;
+                        break;
+                    }
+                } catch (Exception ignored) {
+                    // try next
+                }
+            }
+            if (input != null) {
+                break;
+            }
+        }
+        if (input == null) {
+            throw new org.openqa.selenium.NoSuchElementException(
+                    "Existing patient link field not found in Add Insurance modal.");
+        }
+        scrollToElement(input);
+        input.click();
+        input.clear();
+        String search = patientName.trim();
+        input.sendKeys(search);
+        sleepQuietMs(800);
+        By suggestion = By.xpath(
+                "//ul[contains(@class,'ui-autocomplete-items')]//li[contains(normalize-space(.), "
+                        + xpathLiteral(search) + ")]"
+                        + " | //div[contains(@class,'ui-autocomplete-panel')]//li[contains(normalize-space(.), "
+                        + xpathLiteral(search) + ")]");
+        WebElement option = wait.until(ExpectedConditions.elementToBeClickable(suggestion));
+        scrollToElement(option);
+        try {
+            option.click();
+        } catch (ElementClickInterceptedException e) {
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", option);
+        }
+        sleepQuietMs(500);
+    }
+
+    private void clickSelectOneMenuOptionByText(String optionText, WebDriverWait wait) {
+        By option = By.xpath(
+                "//div[contains(@class,'ui-selectonemenu-panel') and contains(@style,'display: block')]"
+                        + "//li[contains(@data-label," + xpathLiteral(optionText) + ")"
+                        + " or contains(normalize-space(.)," + xpathLiteral(optionText) + ")]");
+        WebElement li = wait.until(ExpectedConditions.elementToBeClickable(option));
+        clickListOption(li);
     }
 
     private static String randomFourDigits() {
@@ -2295,6 +2620,57 @@ public class LoginPage {
         wait.until(ExpectedConditions.visibilityOfElementLocated(growlTitleLocator(expectedMessage)));
     }
 
+    /** Waits until a visible inline or growl error contains {@code expectedMessage}. */
+    public void verifyErrorMessageDisplayed(String expectedMessage) {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        String expected = normalizeMessageText(expectedMessage);
+        wait.until(d -> {
+            for (String actual : collectVisibleErrorMessages()) {
+                if (normalizeMessageText(actual).contains(expected)) {
+                    System.out.println("Verified error message: " + actual);
+                    return true;
+                }
+            }
+            return false;
+        });
+    }
+
+    private List<String> collectVisibleErrorMessages() {
+        List<String> messages = new ArrayList<>();
+        By[] locators = {
+                By.cssSelector("div.ui-message-error-detail"),
+                By.cssSelector("div.ui-message-error p"),
+                By.cssSelector("span.ui-growl-title"),
+                By.cssSelector("div.ui-messages-error span"),
+                By.cssSelector("span.ui-message-error-detail")
+        };
+        for (By locator : locators) {
+            for (WebElement element : driver.findElements(locator)) {
+                try {
+                    if (element.isDisplayed()) {
+                        String text = element.getText().trim();
+                        if (!text.isEmpty()) {
+                            messages.add(text);
+                        }
+                    }
+                } catch (StaleElementReferenceException ignored) {
+                    // try next element
+                }
+            }
+        }
+        return messages;
+    }
+
+    private static String normalizeMessageText(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replace('\u2018', '\'')
+                .replace('\u2019', '\'')
+                .replaceAll("\\s+", " ")
+                .trim();
+    }
+
     public void clickOkButton() {
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(5));
         wait.until(ExpectedConditions.elementToBeClickable(okButton));
@@ -2334,6 +2710,136 @@ public class LoginPage {
             Thread.sleep(10000);
         } catch (InterruptedException e) {
             e.printStackTrace();
+        }
+    }
+
+    /** Closes the open visit invoice dialog when present (returns to Checked-in Visits list). */
+    public void closeVisitDialogIfOpen() {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+        List<WebElement> dialogs = driver.findElements(By.id("InvoiceDlg"));
+        if (dialogs.isEmpty() || !dialogs.get(0).isDisplayed()) {
+            return;
+        }
+        try {
+            WebElement close = wait.until(ExpectedConditions.elementToBeClickable(
+                    By.cssSelector("#InvoiceDlg .ui-dialog-titlebar-close")));
+            scrollToElement(close);
+            close.click();
+        } catch (org.openqa.selenium.TimeoutException e) {
+            ((JavascriptExecutor) driver).executeScript(
+                    "if (typeof PF !== 'undefined' && PF('NewInvoiceWid')) { PF('NewInvoiceWid').hide(); }");
+        }
+        confirmUnsavedVisitChangesDialogIfPresent();
+        waitForBlockingOverlaysToClose(new WebDriverWait(driver, Duration.ofSeconds(30)));
+        System.out.println("Closed visit dialog.");
+    }
+
+    private void confirmUnsavedVisitChangesDialogIfPresent() {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(5));
+        try {
+            WebElement yesBtn = wait.until(ExpectedConditions.elementToBeClickable(
+                    By.xpath("//form[contains(@id,'mainForm1')]//button[.//span[normalize-space()='Yes']]"
+                            + " | //div[contains(@id,'confirmDialog')]//button[.//span[normalize-space()='Yes']]")));
+            scrollToElement(yesBtn);
+            try {
+                yesBtn.click();
+            } catch (ElementClickInterceptedException e) {
+                ((JavascriptExecutor) driver).executeScript("arguments[0].click();", yesBtn);
+            }
+            waitForBlockingOverlaysToClose(new WebDriverWait(driver, Duration.ofSeconds(30)));
+            System.out.println("Saved visit changes before returning to list.");
+        } catch (org.openqa.selenium.TimeoutException ignored) {
+            // no confirmation shown
+        }
+    }
+
+    /** Ensures Patient Access Checked-in Visits table is visible. */
+    public void returnToPatientAccessVisitList() {
+        closeVisitDialogIfOpen();
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20));
+        try {
+            wait.until(ExpectedConditions.visibilityOfElementLocated(By.id("phWLForm:phWLTbl_data")));
+        } catch (org.openqa.selenium.TimeoutException e) {
+            clickPatientAccess();
+            wait.until(ExpectedConditions.visibilityOfElementLocated(By.id("phWLForm:phWLTbl_data")));
+        }
+        System.out.println("Returned to Patient Access visit list.");
+    }
+
+    public void searchVisitInPatientAccess(String searchTerm) {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        WebElement searchInput = wait.until(ExpectedConditions.elementToBeClickable(By.id("phWLForm:search")));
+        scrollToElement(searchInput);
+        searchInput.clear();
+        searchInput.sendKeys(searchTerm);
+        WebElement searchBtn = wait.until(ExpectedConditions.elementToBeClickable(By.id("phWLForm:search-BTN")));
+        scrollToElement(searchBtn);
+        try {
+            searchBtn.click();
+        } catch (ElementClickInterceptedException e) {
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", searchBtn);
+        }
+        waitForBlockingOverlaysToClose(new WebDriverWait(driver, Duration.ofSeconds(30)));
+        System.out.println("Searched Patient Access visits for: " + searchTerm);
+    }
+
+    private static By patientAccessRowByMrn(String mrn) {
+        return By.xpath("//tbody[@id='phWLForm:phWLTbl_data']//tr[.//span[contains(@id,'mrnCol')"
+                + " and normalize-space()=" + xpathLiteral(mrn.trim()) + "]]");
+    }
+
+    public boolean isVisitReadyToBillInPatientAccessList(String mrn) {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20));
+        try {
+            return wait.until(d -> {
+                try {
+                    WebElement row = d.findElement(patientAccessRowByMrn(mrn));
+                    WebElement billStatus = row.findElement(By.xpath(".//span[contains(@id,'billing_Status')]"));
+                    String status = billStatus.getText().trim();
+                    System.out.println("Bill status for MRN " + mrn + ": " + status);
+                    return status.equalsIgnoreCase("Ready to Bill") || status.equalsIgnoreCase("Ready To Bill");
+                } catch (Exception e) {
+                    return false;
+                }
+            });
+        } catch (org.openqa.selenium.TimeoutException e) {
+            System.out.println("Visit for MRN " + mrn + " did not show Ready to Bill in Patient Access list.");
+            return false;
+        }
+    }
+
+    /** Opens a visit from Checked-in Visits by MRN (clicks patient name link). */
+    public void openVisitFromPatientAccessListByMrn(String mrn) {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20));
+        By rowBy = patientAccessRowByMrn(mrn);
+        wait.until(ExpectedConditions.presenceOfElementLocated(rowBy));
+        WebElement link = wait.until(ExpectedConditions.elementToBeClickable(
+                By.xpath("//tbody[@id='phWLForm:phWLTbl_data']//tr[.//span[contains(@id,'mrnCol')"
+                        + " and normalize-space()=" + xpathLiteral(mrn.trim()) + "]]"
+                        + "//a[contains(@id,'patientNameLink')]")));
+        scrollToElement(link);
+        try {
+            link.click();
+        } catch (ElementClickInterceptedException e) {
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", link);
+        }
+        waitForBlockingOverlaysToClose(new WebDriverWait(driver, Duration.ofSeconds(60)));
+        wait.until(ExpectedConditions.or(
+                ExpectedConditions.visibilityOfElementLocated(encounterSection),
+                ExpectedConditions.visibilityOfElementLocated(patientAndEncounterScreen)));
+        System.out.println("Opened visit from Patient Access list for MRN: " + mrn);
+    }
+
+    public boolean isActivityOrderStatusDisplayedInList(int rowIndex, String expectedStatus) {
+        int row = rowIndex + 1;
+        String status = expectedStatus.trim();
+        By rowLocator = By.xpath("//tbody[contains(@id,'AccumedHaadActivityListForm:datalist')]"
+                + "//tr[" + row + "]");
+        try {
+            WebElement rowEl = driver.findElement(rowLocator);
+            return rowEl.getText().contains(status);
+        } catch (Exception e) {
+            return false;
         }
     }
 
