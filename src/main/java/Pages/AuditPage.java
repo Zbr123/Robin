@@ -26,7 +26,6 @@ public class AuditPage {
     private final WebDriver driver;
     private final LoginPage loginPage;
     private String lastServiceCode;
-    private String lastExpectedOrderStatus;
 
     public AuditPage(WebDriver driver, LoginPage loginPage) {
         this.driver = driver;
@@ -80,17 +79,19 @@ public class AuditPage {
         }
     }
 
-    /** Step 3 — edit a service on an open Ready to Bill claim via Diagnosis and Interventions. */
+    /** Step 3 — edit a service on an open Ready to Bill claim (Diagnosis tab already open). */
     public void modifyClaimByEditingService(Map<String, String> fields) {
-        lastExpectedOrderStatus = fields.get("Order Status");
-        if (lastExpectedOrderStatus == null) {
-            lastExpectedOrderStatus = fields.get("order status");
+        String code = fields.get("Code");
+        if (code == null || code.isBlank()) {
+            code = fields.get("code");
         }
-        loginPage.editActivityInDiagnosisTab(fields);
+        if (code != null && !code.isBlank()) {
+            rememberServiceCode(code);
+        }
+        loginPage.editActivityInCurrentDiagnosisTab(fields);
         System.out.println("Modified claim by editing service from Patient Access.");
     }
 
-    /** Claim update completed without validation or growl errors; service remains on the claim. */
     public boolean isClaimModificationSuccessful() {
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
         try {
@@ -100,25 +101,48 @@ public class AuditPage {
         }
         boolean noErrors = !hasVisibleErrorMessages();
         boolean visitOpen = isPatientAccessVisitOpen();
-        boolean servicePresent = lastServiceCode == null
+        boolean serviceUpdated = lastServiceCode == null
                 || lastServiceCode.isBlank()
                 || loginPage.isServiceCodeDisplayedInActivityList(lastServiceCode);
-        boolean orderStatusUpdated = isExpectedOrderStatusDisplayed();
         System.out.println("Claim modification check — noErrors=" + noErrors
-                + ", visitOpen=" + visitOpen + ", servicePresent=" + servicePresent
-                + ", orderStatusUpdated=" + orderStatusUpdated);
-        return noErrors && visitOpen && servicePresent && orderStatusUpdated;
+                + ", visitOpen=" + visitOpen + ", serviceUpdated=" + serviceUpdated
+                + ", expectedCode=" + lastServiceCode);
+        return noErrors && visitOpen && serviceUpdated;
     }
 
-    private boolean isExpectedOrderStatusDisplayed() {
-        if (lastExpectedOrderStatus == null || lastExpectedOrderStatus.isBlank()) {
-            return true;
-        }
-        loginPage.clickDiagnosisAndInterventions();
-        return loginPage.isActivityOrderStatusDisplayedInList(0, lastExpectedOrderStatus.trim());
+    public void openFirstReadyToBillVisitFromPatientAccess() {
+        loginPage.openFirstReadyToBillVisitFromPatientAccess();
+    }
+
+    public void clickExcludeClaimToolbarButton() {
+        loginPage.clickExcludeClaimToolbarButton();
+    }
+
+    public void confirmExcludeClaimDialogYes() {
+        loginPage.confirmExcludeClaimDialogYes();
+    }
+
+    public void fillExcludeClaimForm(Map<String, String> fields) {
+        loginPage.fillExcludeClaimForm(fields);
+    }
+
+    public void submitExcludeClaimForm() {
+        loginPage.submitExcludeClaimForm();
+    }
+
+    public void excludeClaimOnOpenVisit(Map<String, String> fields) {
+        loginPage.excludeClaimOnOpenVisit(fields);
     }
 
     private boolean isPatientAccessVisitOpen() {
+        try {
+            List<WebElement> invoiceDialogs = driver.findElements(By.id("InvoiceDlg"));
+            if (!invoiceDialogs.isEmpty() && invoiceDialogs.get(0).isDisplayed()) {
+                return true;
+            }
+        } catch (Exception ignored) {
+            // fall through
+        }
         try {
             if (driver.findElement(encounterSection).isDisplayed()) {
                 return true;

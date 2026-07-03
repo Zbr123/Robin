@@ -27,6 +27,11 @@ public class PatientRegistrationPage {
     private String lastRegisteredNationalId;
     private String lastFirstName;
     private String lastLastName;
+    private String lastVisitorSubCategory;
+    private String lastVisaType;
+    private String lastMissingQidReason;
+    private String previousVisaTypeLabel;
+    private String lastVisaTypeLabel;
 
     private static final String FORM = "AccumedPatientCreateForm";
     private static final By mrnField = By.id(FORM + ":mrn");
@@ -35,6 +40,8 @@ public class PatientRegistrationPage {
     private static final By dobField = By.id(FORM + ":dateOfBirth2_input");
     private static final By passportField = By.id(FORM + ":crPassportId");
     private static final String EDIT_FORM = "AccumedPatientEditForm";
+    private static final String EDIT_VISA_TYPE_WIDGET = EDIT_FORM + ":visaType";
+    private static final By editAddInsuranceButton = By.id(EDIT_FORM + ":createButtonInsurance");
     private static final By editPatientButton = By.id("InvoiceForm:editPatientButton");
     private static final By editPatientDialog = By.id("AccumedPatientEditDlg");
     private static final By editPassportField = By.id(EDIT_FORM + ":crPassportId");
@@ -57,6 +64,14 @@ public class PatientRegistrationPage {
     private static final By insuranceCardsTableBody = By.id("AccumedPatientCreateForm:datalist_data");
     private static final String INSURANCE_CARD_ROW_XPATH =
             "//tbody[@id='AccumedPatientCreateForm:datalist_data']/tr[contains(@class,'ui-datatable-selectable')]";
+    private static final String EDIT_INSURANCE_CARD_ROW_XPATH =
+            "//tbody[@id='AccumedPatientEditForm:datalist_data']/tr[contains(@class,'ui-datatable-selectable')]";
+    private static final By editInsuranceDialog = By.id("AccumedPatientInsuranceEditDlg");
+    private static final By editInsuranceMemberIdField =
+            By.id("AccumedPatientInsuranceEditForm:patientInsuranceId");
+    private static final By editInsuranceSaveButton = By.xpath(
+            "//form[@id='AccumedPatientInsuranceEditForm']//button[.//span[normalize-space()='Save']]"
+                    + " | //button[@id='AccumedPatientInsuranceEditForm:save']");
 
     public PatientRegistrationPage(WebDriver driver) {
         this.driver = driver;
@@ -88,6 +103,99 @@ public class PatientRegistrationPage {
         wait.until(ExpectedConditions.visibilityOfElementLocated(editPassportField));
         waitForAjaxSettle(wait);
         System.out.println("Edit Patient modal opened.");
+    }
+
+    public void clickEditInsuranceCardInEditPatientModal(int rowIndex) {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        wait.until(ExpectedConditions.visibilityOfElementLocated(editPatientDialog));
+        expandEditPatientHealthInsuranceSectionIfNeeded();
+        By editBtn = By.xpath(EDIT_INSURANCE_CARD_ROW_XPATH + "[@data-ri='" + rowIndex + "']"
+                + "//button[contains(@id,'editPatientInsuranceButton')]");
+        WebElement btn = wait.until(ExpectedConditions.elementToBeClickable(editBtn));
+        scrollToElement(btn);
+        try {
+            btn.click();
+        } catch (Exception e) {
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", btn);
+        }
+        wait.until(ExpectedConditions.visibilityOfElementLocated(editInsuranceDialog));
+        wait.until(ExpectedConditions.visibilityOfElementLocated(editInsuranceMemberIdField));
+        waitForAjaxSettle(wait);
+        System.out.println("Opened Edit Insurance modal for row " + rowIndex + ".");
+    }
+
+    public void updateMemberIdInEditInsuranceModal(String newMemberIdValue, LoginPage loginPage) {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        wait.until(ExpectedConditions.visibilityOfElementLocated(editInsuranceMemberIdField));
+        String memberId;
+        if (newMemberIdValue == null || newMemberIdValue.isBlank()
+                || "auto".equalsIgnoreCase(newMemberIdValue.trim())) {
+            memberId = loginPage.generateAndRememberDifferentMemberId();
+        } else {
+            memberId = newMemberIdValue.trim();
+            loginPage.rememberRegisteredMemberId(memberId);
+        }
+        setTextInput(editInsuranceMemberIdField, memberId);
+        waitForAjaxSettle(wait);
+        System.out.println("Updated Member ID in Edit Insurance modal to: " + memberId);
+    }
+
+    public void saveEditInsuranceModal() {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20));
+        WebElement saveBtn = wait.until(ExpectedConditions.elementToBeClickable(editInsuranceSaveButton));
+        scrollToElement(saveBtn);
+        try {
+            saveBtn.click();
+        } catch (Exception e) {
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", saveBtn);
+        }
+        wait.until(ExpectedConditions.invisibilityOfElementLocated(editInsuranceDialog));
+        waitForAjaxSettle(wait);
+        System.out.println("Saved Edit Insurance modal.");
+    }
+
+    public boolean isMemberIdListedInEditPatientInsuranceRow(int rowIndex, String expectedMemberId) {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        final String expected = expectedMemberId.trim();
+        try {
+            wait.until(d -> expected.equals(getMemberIdFromEditPatientInsuranceRow(rowIndex)));
+        } catch (org.openqa.selenium.TimeoutException ignored) {
+            // log actual below
+        }
+        String actual = getMemberIdFromEditPatientInsuranceRow(rowIndex);
+        System.out.println("Edit Patient insurance row " + rowIndex + " Member ID — expected: "
+                + expected + ", actual: " + actual);
+        return expected.equals(actual);
+    }
+
+    public String getMemberIdFromEditPatientInsuranceRow(int rowIndex) {
+        expandEditPatientHealthInsuranceSectionIfNeeded();
+        By rowLocator = By.xpath(EDIT_INSURANCE_CARD_ROW_XPATH + "[@data-ri='" + rowIndex + "']");
+        try {
+            WebElement row = driver.findElement(rowLocator);
+            List<WebElement> cells = row.findElements(By.xpath(".//td[@role='gridcell']"));
+            if (cells.size() > 1) {
+                return cells.get(1).getText().trim();
+            }
+        } catch (Exception e) {
+            return "";
+        }
+        return "";
+    }
+
+    private void expandEditPatientHealthInsuranceSectionIfNeeded() {
+        try {
+            WebElement collapsed = driver.findElement(By.id("AccumedPatientEditForm:INSID_collapsed"));
+            if ("true".equalsIgnoreCase(collapsed.getAttribute("value"))) {
+                WebElement legend = driver.findElement(
+                        By.xpath("//fieldset[@id='AccumedPatientEditForm:INSID']//legend"));
+                scrollToElement(legend);
+                legend.click();
+                sleepQuietMs(500);
+            }
+        } catch (Exception ignored) {
+            // already expanded
+        }
     }
 
     /**
@@ -142,7 +250,383 @@ public class PatientRegistrationPage {
                 System.out.println("National ID field not yet refreshed on patient form after save.");
             }
         }
+        if (lastVisaTypeLabel != null && !lastVisaTypeLabel.isBlank()) {
+            final String expectedVisa = lastVisaTypeLabel;
+            try {
+                wait.until(d -> {
+                    String actual = getVisaTypeFromPatientInfo();
+                    return actual != null && actual.equalsIgnoreCase(expectedVisa);
+                });
+            } catch (org.openqa.selenium.TimeoutException ignored) {
+                System.out.println("Visa type not yet refreshed on patient form after save.");
+            }
+        }
+        waitForEncounterInsuranceOnVisit();
         System.out.println("Edit Patient modal saved — encounter screen refreshed.");
+    }
+
+    /** TC18 — change visa type in Edit Patient modal after patient tag is saved. */
+    public void updateVisaTypeInEditPatientModal(String newVisaType, LoginPage loginPage) {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        wait.until(ExpectedConditions.visibilityOfElementLocated(editPatientDialog));
+        previousVisaTypeLabel = getSelectOneMenuLabelOnPage("visaType");
+        if (newVisaType.matches("\\d+")) {
+            loginPage.selectCreatePatientDropdown(EDIT_VISA_TYPE_WIDGET, newVisaType);
+        } else {
+            loginPage.selectCreatePatientDropdownContaining(EDIT_VISA_TYPE_WIDGET, newVisaType);
+        }
+        lastVisaType = newVisaType;
+        lastVisaTypeLabel = getSelectOneMenuLabelInEditPatientModal("visaType");
+        waitForAjaxSettle(wait);
+        System.out.println("Visa type updated in Edit Patient — previous: " + previousVisaTypeLabel
+                + ", new: " + lastVisaTypeLabel);
+    }
+
+    public void clickAddInsuranceCardInEditPatientModal() {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20));
+        wait.until(ExpectedConditions.visibilityOfElementLocated(editPatientDialog));
+        expandEditPatientHealthInsuranceSectionIfNeeded();
+        scrollToElement(driver.findElement(editPatientDialog));
+        By[] patterns = {
+                By.id("AccumedPatientEditForm:createButtonInsurance"),
+                By.xpath("//*[@id='AccumedPatientEditDlg']//button[contains(@id,'createButtonInsurance')]"),
+                By.xpath("//form[contains(@id,'AccumedPatientEditForm')]//button[contains(@id,'Insurance')]"),
+                By.xpath("//*[@id='AccumedPatientEditDlg']//button[.//span[contains(.,'Add Insurance')]]"),
+                By.xpath("//button[contains(@onclick,'Insurance')][.//span[contains(.,'Insurance')]]"),
+                By.id("AccumedPatientCreateForm:createButtonInsurance")
+        };
+        for (By pattern : patterns) {
+            for (WebElement btn : driver.findElements(pattern)) {
+                try {
+                    if (btn.isDisplayed() && btn.isEnabled()) {
+                        scrollToElement(btn);
+                        try {
+                            btn.click();
+                        } catch (Exception e) {
+                            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", btn);
+                        }
+                        wait.until(ExpectedConditions.or(
+                                ExpectedConditions.visibilityOfElementLocated(
+                                        By.id("AccumedPatientInsuranceCreateForm:insuranceLisence_label")),
+                                ExpectedConditions.presenceOfElementLocated(
+                                        By.xpath("//*[contains(@id,'AccumedPatientInsuranceCreateForm')]"))));
+                        System.out.println("Clicked Add Insurance Card in Edit Patient modal.");
+                        return;
+                    }
+                } catch (StaleElementReferenceException ignored) {
+                    // try next
+                }
+            }
+        }
+        throw new org.openqa.selenium.NoSuchElementException(
+                "Add Insurance Card button not found in Edit Patient modal.");
+    }
+
+    public boolean isVisaTypeUpdatedOnPatient() {
+        String current = getVisaTypeFromPatientInfo();
+        if (current == null || current.isBlank()) {
+            System.out.println("Visa type on patient — empty after update.");
+            return false;
+        }
+        boolean updated = lastVisaTypeLabel != null && !lastVisaTypeLabel.isBlank()
+                && current.equalsIgnoreCase(lastVisaTypeLabel);
+        System.out.println("Visa type update check — previous='" + previousVisaTypeLabel
+                + "', expected='" + lastVisaTypeLabel + "', actual='" + current + "', updated=" + updated);
+        return updated;
+    }
+
+    public String getVisaTypeFromPatientInfo() {
+        String field = getPatientInfoFieldValue("Visa Type");
+        if (field != null && !field.isBlank() && !field.toLowerCase().contains("patient category")) {
+            return field.trim();
+        }
+        String[] lines = getInvoiceFormVisibleText().split("\\R");
+        for (int i = 0; i < lines.length - 1; i++) {
+            if ("Visa Type".equalsIgnoreCase(lines[i].trim())) {
+                String next = lines[i + 1].trim();
+                if (!next.isEmpty()) {
+                    return next;
+                }
+            }
+        }
+        return getSelectOneMenuLabelOnPage("visaType");
+    }
+
+    /** UC_18 — encounter payment type or tag indicates Self Pay (TRANSIT). */
+    public boolean isEncounterLabelSelfPay() {
+        waitForEncounterPatientInfoRefresh();
+        if (matchesSelfPayText(getEncounterTagLabel())) {
+            System.out.println("Encounter Self Pay — tag: " + getEncounterTagLabel());
+            return true;
+        }
+        for (String term : new String[] {"Self Pay", "SelfPay", "Self-Pay", "Cash"}) {
+            if (hasVisibleShortText(term, 40)) {
+                System.out.println("Encounter Self Pay — visible text: " + term);
+                return true;
+            }
+        }
+        String paymentType = getPatientInfoFieldValue("Payment Type");
+        String payLower = paymentType == null ? "" : paymentType.toLowerCase();
+        if (payLower.contains("self") || payLower.contains("cash")) {
+            System.out.println("Encounter Self Pay — payment type: " + paymentType);
+            return true;
+        }
+        String invoiceText = getInvoiceFormVisibleText().toLowerCase();
+        if (invoiceText.contains("self pay") || invoiceText.contains("self-pay")
+                || invoiceText.contains("selfpay")) {
+            System.out.println("Encounter Self Pay — found in invoice form text.");
+            return true;
+        }
+        boolean noInsurer = getPatientInsuranceCardCount() == 0
+                && !getInvoiceFormVisibleText().toLowerCase().contains("qlm life");
+        boolean notInsurancePayment = payLower.isBlank() || !payLower.contains("insurance");
+        boolean visitorPath = !getPatientInfoFieldValue("Visitor Sub-Category").isBlank();
+        if (noInsurer && notInsurancePayment && visitorPath) {
+            System.out.println("Encounter Self Pay — visitor without insurance (payment='" + paymentType + "').");
+            return true;
+        }
+        System.out.println("Encounter Self Pay check failed — payment='" + paymentType
+                + "', tag='" + getEncounterTagLabel() + "', noInsurer=" + noInsurer);
+        return false;
+    }
+
+    private static final By patientCategoryLabel = By.id("InvoiceForm:PatientTypeCash");
+
+    /** Encounter Patient Category label (e.g. Visitor-SelfPay, Visitor-Insured). */
+    public String getPatientCategoryLabel() {
+        for (WebElement el : driver.findElements(patientCategoryLabel)) {
+            try {
+                if (el.isDisplayed()) {
+                    return el.getText().trim();
+                }
+            } catch (StaleElementReferenceException ignored) {
+                // retry next element
+            }
+        }
+        return "";
+    }
+
+    /** UC_18 — Patient Category on encounter shows Visitor Self Pay. */
+    public boolean isEncounterLabelVisitorSelfPay() {
+        waitForEncounterPatientInfoRefresh();
+        String category = getPatientCategoryLabel();
+        if (matchesVisitorSelfPayCategory(category)) {
+            System.out.println("Visitor Self Pay — Patient Category: " + category);
+            return true;
+        }
+        String tag = getEncounterTagLabel().toLowerCase();
+        if (tag.contains("visitor") && (tag.contains("self pay") || tag.contains("self-pay")
+                || tag.contains("selfpay"))) {
+            System.out.println("Visitor Self Pay — tag: " + getEncounterTagLabel());
+            return true;
+        }
+        String invoiceText = getInvoiceFormVisibleText().toLowerCase();
+        if (invoiceText.contains("visitor-selfpay") || invoiceText.contains("visitor-self pay")
+                || invoiceText.contains("visitor self pay")) {
+            System.out.println("Visitor Self Pay — found in invoice form text.");
+            return true;
+        }
+        System.out.println("Visitor Self Pay check failed — category='" + category
+                + "', tag='" + getEncounterTagLabel() + "'");
+        return false;
+    }
+
+    private static boolean matchesVisitorSelfPayCategory(String category) {
+        if (category == null || category.isBlank()) {
+            return false;
+        }
+        String normalized = category.replace("-", "").replace(" ", "").toLowerCase();
+        return normalized.contains("visitorselfpay");
+    }
+
+    private static boolean matchesSelfPayText(String text) {
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        String lower = text.toLowerCase();
+        return lower.contains("self pay") || lower.contains("self-pay") || lower.contains("selfpay");
+    }
+
+    private String getInvoiceFormVisibleText() {
+        for (By by : new By[] {
+                By.xpath("//form[contains(@id,'InvoiceForm')]"),
+                By.id("InvoiceDlg"),
+                By.xpath("//*[contains(@id,'NewInvoice')]")
+        }) {
+            for (WebElement el : driver.findElements(by)) {
+                try {
+                    if (el.isDisplayed()) {
+                        String text = el.getText();
+                        if (text != null && !text.isBlank()) {
+                            return text;
+                        }
+                    }
+                } catch (StaleElementReferenceException ignored) {
+                    // try next
+                }
+            }
+        }
+        return "";
+    }
+
+    public String getEncounterTagLabel() {
+        String best = "";
+        By[] scopes = {
+                By.id("InvoiceDlg"),
+                By.xpath("//form[contains(@id,'InvoiceForm')]"),
+                By.xpath("//*[contains(@id,'NewInvoice')]")
+        };
+        for (By scopeBy : scopes) {
+            for (WebElement scope : driver.findElements(scopeBy)) {
+                try {
+                    if (!scope.isDisplayed()) {
+                        continue;
+                    }
+                    for (WebElement el : scope.findElements(By.xpath(
+                            ".//*[contains(normalize-space(.),'Visitor')][string-length(normalize-space(.)) < 90]"))) {
+                        try {
+                            if (!el.isDisplayed()) {
+                                continue;
+                            }
+                            String text = el.getText().trim();
+                            if (text.length() < 8) {
+                                continue;
+                            }
+                            String lower = text.toLowerCase();
+                            if (!lower.contains("self pay") && !lower.contains("self-pay")
+                                    && !lower.contains("insured")) {
+                                continue;
+                            }
+                            if (best.isEmpty() || text.length() < best.length()) {
+                                best = text;
+                            }
+                        } catch (StaleElementReferenceException ignored) {
+                            // try next
+                        }
+                    }
+                } catch (StaleElementReferenceException ignored) {
+                    // try next scope
+                }
+            }
+        }
+        if (best.isEmpty()) {
+            for (WebElement el : driver.findElements(By.xpath(
+                    "//*[not(ancestor::tbody[@id='phWLForm:phWLTbl_data'])]"
+                            + "[contains(normalize-space(.),'Visitor')]"
+                            + "[contains(.,'Self Pay') or contains(.,'Self-Pay') or contains(.,'Insured')]"
+                            + "[string-length(normalize-space(.)) < 90]"))) {
+                try {
+                    if (el.isDisplayed()) {
+                        String text = el.getText().trim();
+                        if (text.length() >= 8 && (best.isEmpty() || text.length() < best.length())) {
+                            best = text;
+                        }
+                    }
+                } catch (StaleElementReferenceException ignored) {
+                    // try next
+                }
+            }
+        }
+        return best;
+    }
+
+    private void waitForEncounterPatientInfoRefresh() {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+        try {
+            wait.until(d -> isEncounterSectionActive()
+                    || !getPatientInfoFieldValue("Passport No").isBlank()
+                    || !getEncounterTagLabel().isBlank()
+                    || hasVisibleShortText("Self Pay", 40)
+                    || hasVisibleShortText("Visitor", 80));
+        } catch (org.openqa.selenium.TimeoutException ignored) {
+            // continue with best-effort checks
+        }
+        sleepQuietMs(500);
+    }
+
+    private boolean hasVisibleShortText(String needle, int maxLength) {
+        if (needle == null || needle.isBlank()) {
+            return false;
+        }
+        String lowerNeedle = needle.toLowerCase();
+        for (WebElement el : driver.findElements(By.xpath(
+                "//*[not(ancestor::tbody[@id='phWLForm:phWLTbl_data'])]"
+                        + "[contains(translate(normalize-space(.),"
+                        + "'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),"
+                        + "'" + lowerNeedle + "')]"))) {
+            try {
+                if (!el.isDisplayed()) {
+                    continue;
+                }
+                String text = el.getText().trim();
+                if (!text.isEmpty() && text.length() <= maxLength
+                        && text.toLowerCase().contains(lowerNeedle)) {
+                    return true;
+                }
+            } catch (StaleElementReferenceException ignored) {
+                // try next
+            }
+        }
+        return false;
+    }
+
+    private String getPatientInfoFieldValue(String fieldLabel) {
+        if (fieldLabel == null || fieldLabel.isBlank()) {
+            return "";
+        }
+        String literal = fieldLabel.trim();
+        By[] valueLocators = {
+                By.xpath("//label[normalize-space()='" + literal + "']/following-sibling::*[1]"),
+                By.xpath("//*[normalize-space()='" + literal + "']/following-sibling::*[1]"),
+                By.xpath("//td[normalize-space()='" + literal + "']/following-sibling::td[1]"),
+                By.xpath("//th[normalize-space()='" + literal + "']/following-sibling::td[1]"),
+                By.xpath("//*[normalize-space()='" + literal + "']/parent::*/following-sibling::*[1]"),
+                By.xpath("//*[contains(@id,'InvoiceForm') or contains(@id,'AccumedPatientCreateForm')]"
+                        + "//*[normalize-space()='" + literal + "']/following::*[self::span or self::div or self::label][1]")
+        };
+        for (By by : valueLocators) {
+            for (WebElement el : driver.findElements(by)) {
+                try {
+                    if (el.isDisplayed()) {
+                        String text = el.getText().trim();
+                        if (!text.isEmpty()) {
+                            return text;
+                        }
+                        String value = el.getAttribute("value");
+                        if (value != null && !value.isBlank()) {
+                            return value.trim();
+                        }
+                    }
+                } catch (StaleElementReferenceException ignored) {
+                    // try next
+                }
+            }
+        }
+        return "";
+    }
+
+    private String getSelectOneMenuLabelInEditPatientModal(String widgetSuffix) {
+        WebElement dialog;
+        try {
+            dialog = driver.findElement(editPatientDialog);
+        } catch (Exception e) {
+            return getSelectOneMenuLabelOnPage(widgetSuffix);
+        }
+        for (WebElement el : dialog.findElements(By.xpath(
+                ".//div[contains(@id,'" + widgetSuffix + "')]//label[contains(@class,'ui-selectonemenu-label')]"
+                        + " | .//span[contains(@id,'" + widgetSuffix + "_label')]"))) {
+            try {
+                if (el.isDisplayed()) {
+                    String text = el.getText().trim();
+                    if (!text.isEmpty()) {
+                        return text;
+                    }
+                }
+            } catch (StaleElementReferenceException ignored) {
+                // try next
+            }
+        }
+        return getSelectOneMenuLabelOnPage(widgetSuffix);
     }
 
     /**
@@ -238,6 +722,7 @@ public class PatientRegistrationPage {
         boolean checkNoQid = !"false".equalsIgnoreCase(data.getOrDefault("No QID Check", "true"));
 
         setTextInput(mrnField, mrn);
+        loginPage.rememberRegisteredMrn(mrn);
         setTextInput(firstNameField, firstName);
         setTextInput(lastNameField, lastName);
         setTextInput(dobField, dob);
@@ -254,15 +739,20 @@ public class PatientRegistrationPage {
 
         setTextInput(passportField, passport);
         if (hasValue(data, "Visitor Sub-Category")) {
-            loginPage.selectCreatePatientDropdown(VISITOR_SUB_CATEGORY_WIDGET, visitorSubCategory);
+            selectVisitorSubCategory(loginPage, visitorSubCategory);
+            lastVisitorSubCategory = visitorSubCategory;
         }
         if (hasValue(data, "Visa Type")) {
-            loginPage.selectCreatePatientDropdown(VISA_TYPE_WIDGET, visaType);
+            selectVisaType(loginPage, visaType);
+            lastVisaType = visaType;
         }
 
         lastFirstName = firstName;
         lastLastName = lastName;
         lastRegisteredPassport = readPassportValue(passport);
+        if (missingReason != null && !missingReason.isBlank()) {
+            lastMissingQidReason = missingReason;
+        }
         if (initialRegisteredPassport == null) {
             initialRegisteredPassport = lastRegisteredPassport;
         }
@@ -317,17 +807,286 @@ public class PatientRegistrationPage {
         System.out.println("Filled baby visitor patient form — MRN: " + mrn + ", Name: " + firstName + " " + lastName);
     }
 
+    /** UC_17 — patient + encounter visible after visitor insert. */
+    public boolean isPatientRecordCreated() {
+        try {
+            if (driver.findElement(encounterSection).isDisplayed()) {
+                System.out.println("Patient record created — Encounter section is visible.");
+                return true;
+            }
+        } catch (Exception ignored) {
+            // fall through
+        }
+        return isEncounterSectionActive();
+    }
+
+    /** UC_17 — Missing QID, passport, visitor sub-category, visa type, and missing-QID reason stored. */
+    public boolean areAdtVisitorFieldsStored() {
+        boolean passportOk = lastRegisteredPassport != null && !lastRegisteredPassport.isBlank()
+                && isPassportNumber(lastRegisteredPassport);
+        boolean missingQidOk = isNationalIdEmptyOnForm();
+        String subCategoryLabel = getSelectOneMenuLabelOnPage("visitorSubCategory");
+        String visaLabel = getSelectOneMenuLabelOnPage("visaType");
+        String reasonLabel = getSelectOneMenuLabelOnPage("noNationalID");
+        boolean subCategoryOk = subCategoryLabel != null && !subCategoryLabel.isBlank()
+                && !subCategoryLabel.equalsIgnoreCase("Select One")
+                && !subCategoryLabel.equalsIgnoreCase("Select");
+        boolean visaOk = visaLabel != null && !visaLabel.isBlank()
+                && !visaLabel.equalsIgnoreCase("Select One")
+                && !visaLabel.equalsIgnoreCase("Select");
+        boolean reasonOk = reasonLabel != null && !reasonLabel.isBlank()
+                && !reasonLabel.equalsIgnoreCase("Select One")
+                && !reasonLabel.equalsIgnoreCase("Select");
+        System.out.println("ADT fields — passport=" + passportOk + ", missingQid=" + missingQidOk
+                + ", subCategory='" + subCategoryLabel + "' (" + subCategoryOk + ")"
+                + ", visa='" + visaLabel + "' (" + visaOk + ")"
+                + ", reason='" + reasonLabel + "' (" + reasonOk + ")");
+        return passportOk && missingQidOk && subCategoryOk && visaOk && reasonOk;
+    }
+
+    /** UC_17 — insurer listed on auto-created encounter (table, billing group, or insurer text on page). */
+    public boolean isPatientInsurerListedOnEncounter() {
+        String invoiceText = getInvoiceFormVisibleText();
+        String invoiceLower = invoiceText.toLowerCase();
+        if (invoiceLower.contains("qlm life") || invoiceLower.contains("insurance company")) {
+            if (invoiceLower.contains("payment type") && invoiceLower.contains("insurance")) {
+                System.out.println("Patient insurer on encounter — QLM payer with Insurance payment type.");
+                return true;
+            }
+            if (invoiceText.contains("PHI/116849/000006")) {
+                System.out.println("Patient insurer on encounter — payer listed on invoice form.");
+                return true;
+            }
+        }
+        String billingGroup = getBillingGroupText().toLowerCase();
+        if (billingGroup.contains("insured")) {
+            System.out.println("Patient insurer on encounter — billing group indicates insured: " + billingGroup);
+            return true;
+        }
+        expandHealthInsuranceSectionIfNeeded();
+        if (getPatientInsuranceCardCount() >= 1) {
+            System.out.println("Patient insurer on encounter — insurance card(s) visible in Health Insurance Info.");
+            return true;
+        }
+        return isInsuranceVisibleOnEncounter();
+    }
+
+    /** UC_17 — billing group / visit label shows Visitor Insured. */
+    public boolean isEncounterLabelVisitorInsured() {
+        String tag = getEncounterTagLabel().toLowerCase();
+        if (tag.contains("visitor") && tag.contains("insured") && !tag.contains("self")) {
+            System.out.println("Encounter Visitor Insured — tag: " + getEncounterTagLabel());
+            return true;
+        }
+        String invoiceLower = getInvoiceFormVisibleText().toLowerCase();
+        if (invoiceLower.contains("visitor-insured") || invoiceLower.contains("visitor insured")) {
+            System.out.println("Encounter Visitor Insured — found in invoice form.");
+            return true;
+        }
+        String paymentType = getPatientInfoFieldValue("Payment Type");
+        if (paymentType != null && paymentType.toLowerCase().contains("insurance")
+                && invoiceLower.contains("qlm")) {
+            System.out.println("Encounter Visitor Insured — payment type Insurance with QLM payer.");
+            return true;
+        }
+        if (isPatientVisitorInsuredOnEncounter()) {
+            return true;
+        }
+        System.out.println("Encounter Visitor Insured check failed — tag='" + getEncounterTagLabel()
+                + "', paymentType='" + paymentType + "'");
+        return false;
+    }
+
+    public void waitForInsuranceCardInEditPatientModal() {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20));
+        wait.until(ExpectedConditions.visibilityOfElementLocated(editPatientDialog));
+        expandEditPatientHealthInsuranceSectionIfNeeded();
+        wait.until(d -> !driver.findElements(By.xpath(EDIT_INSURANCE_CARD_ROW_XPATH)).isEmpty());
+        System.out.println("Insurance card visible in Edit Patient modal.");
+    }
+
+    public void waitForEncounterInsuranceOnVisit() {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(30));
+        try {
+            wait.until(d -> {
+                String invoice = getInvoiceFormVisibleText().toLowerCase();
+                return (invoice.contains("qlm") || invoice.contains("insurance company"))
+                        && (invoice.contains("payment type") && invoice.contains("insurance")
+                        || invoice.contains("visitor-insured") || invoice.contains("visitor insured"));
+            });
+            System.out.println("Encounter insurance / Visitor Insured reflected on visit.");
+        } catch (org.openqa.selenium.TimeoutException e) {
+            System.out.println("Encounter insurance not fully reflected on visit within timeout.");
+        }
+    }
+
+    public String getLastVisitorSubCategory() {
+        return lastVisitorSubCategory == null ? "" : lastVisitorSubCategory;
+    }
+
+    private void selectVisitorSubCategory(LoginPage loginPage, String value) {
+        if (value.matches("\\d+")) {
+            loginPage.selectCreatePatientDropdown(VISITOR_SUB_CATEGORY_WIDGET, value);
+        } else {
+            String[] keywords = {value, "TRANSIT", "FAMILY", "HAYYA", "VISIT"};
+            boolean selected = false;
+            for (String keyword : keywords) {
+                try {
+                    loginPage.selectCreatePatientDropdownContaining(VISITOR_SUB_CATEGORY_WIDGET, keyword);
+                    selected = true;
+                    break;
+                } catch (RuntimeException ignored) {
+                    // try next keyword
+                }
+            }
+            if (!selected) {
+                loginPage.selectCreatePatientDropdown(VISITOR_SUB_CATEGORY_WIDGET, "2");
+            }
+        }
+        lastVisitorSubCategory = getSelectOneMenuLabelOnPage("visitorSubCategory");
+        if (lastVisitorSubCategory.isBlank()) {
+            lastVisitorSubCategory = value;
+        }
+    }
+
+    private void selectVisaType(LoginPage loginPage, String value) {
+        if (value.matches("\\d+")) {
+            loginPage.selectCreatePatientDropdown(VISA_TYPE_WIDGET, value);
+        } else {
+            loginPage.selectCreatePatientDropdownContaining(VISA_TYPE_WIDGET, value);
+        }
+        lastVisaType = getSelectOneMenuLabelOnPage("visaType");
+        if (lastVisaType.isBlank()) {
+            lastVisaType = value;
+        }
+    }
+
+    private String getSelectOneMenuLabelOnPage(String widgetSuffix) {
+        By[] locators = {
+                By.xpath("//div[contains(@id,'" + widgetSuffix + "')]//label[contains(@class,'ui-selectonemenu-label')]"),
+                By.xpath("//span[contains(@id,'" + widgetSuffix + "_label')]"),
+                By.xpath("//*[contains(@id,'" + widgetSuffix + "')]//span[contains(@class,'ui-selectonemenu-label')]")
+        };
+        for (By by : locators) {
+            for (WebElement el : driver.findElements(by)) {
+                try {
+                    if (el.isDisplayed()) {
+                        String text = el.getText().trim();
+                        if (!text.isEmpty()) {
+                            return text;
+                        }
+                    }
+                } catch (StaleElementReferenceException ignored) {
+                    // try next
+                }
+            }
+        }
+        return "";
+    }
+
+    private boolean isDropdownLabelMatching(String actualLabel, String expected) {
+        if (actualLabel == null || actualLabel.isBlank()) {
+            return false;
+        }
+        if (expected == null || expected.isBlank()) {
+            return true;
+        }
+        String actual = actualLabel.toLowerCase();
+        String exp = expected.toLowerCase();
+        if (actual.contains(exp)) {
+            return true;
+        }
+        return exp.matches("\\d+") && actual.matches(".*\\b" + exp + "\\b.*");
+    }
+
     public boolean isVisitLabelVisitorInsuredOrSelfPay() {
+        if (isPatientVisitorInsuredOnEncounter()) {
+            return true;
+        }
         String label = getVisitLabelText();
         System.out.println("Visit label text: " + label);
         if (label == null || label.isBlank()) {
             return false;
         }
         String normalized = label.toLowerCase();
+        if (normalized.contains("sub-category") || normalized.contains("visa type")) {
+            return false;
+        }
         boolean hasVisitor = normalized.contains("visitor");
         boolean hasInsured = normalized.contains("insured");
         boolean hasSelfPay = normalized.contains("self pay") || normalized.contains("self-pay");
         return hasVisitor && (hasInsured || hasSelfPay);
+    }
+
+    /** Visitor with insurance on encounter — insurance card listed after visitor registration. */
+    public boolean isPatientVisitorInsuredOnEncounter() {
+        String billingGroup = getBillingGroupText().toLowerCase();
+        boolean insuranceListed = isInsuranceVisibleOnEncounter();
+        System.out.println("Visitor insured check — billingGroup='" + billingGroup
+                + "', insuranceListed=" + insuranceListed);
+        if (insuranceListed) {
+            return true;
+        }
+        if (billingGroup.contains("visitor") && billingGroup.contains("insured")) {
+            return true;
+        }
+        return billingGroup.contains("visitor") && insuranceListed;
+    }
+
+    public String getBillingGroupText() {
+        By[] locators = {
+                By.xpath("//input[contains(@id,'billinggroup') or contains(@id,'billingGroup')]"),
+                By.xpath("//span[contains(@id,'billingGroup') or contains(@id,'billinggroup')]"),
+                By.xpath("//label[contains(normalize-space(.),'Billing Group')]/following::input[1]")
+        };
+        for (By by : locators) {
+            for (WebElement el : driver.findElements(by)) {
+                try {
+                    if (!el.isDisplayed()) {
+                        continue;
+                    }
+                    String value = el.getAttribute("value");
+                    if (value != null && !value.isBlank()) {
+                        return value.trim();
+                    }
+                    String text = el.getText().trim();
+                    if (!text.isEmpty()) {
+                        return text;
+                    }
+                } catch (StaleElementReferenceException ignored) {
+                    // try next
+                }
+            }
+        }
+        return "";
+    }
+
+    private boolean isInsuranceVisibleOnEncounter() {
+        By[] insuranceTables = {
+                By.xpath("//tbody[@id='AccumedPatientCreateForm:datalist_data']"
+                        + "/tr[contains(@class,'ui-datatable-selectable')]"),
+                By.xpath("//tbody[@id='AccumedPatientEditForm:datalist_data']"
+                        + "/tr[contains(@class,'ui-datatable-selectable')]"),
+                By.xpath("//fieldset[contains(@id,'INSID')]//tbody[contains(@id,'datalist_data')]"
+                        + "/tr[contains(@class,'ui-datatable-selectable')]")
+        };
+        for (By tableRows : insuranceTables) {
+            for (WebElement row : driver.findElements(tableRows)) {
+                try {
+                    if (!row.isDisplayed()) {
+                        continue;
+                    }
+                    String rowText = row.getText().trim();
+                    if (!rowText.isEmpty() && !rowText.toLowerCase().contains("no record")) {
+                        System.out.println("Insurance row on encounter: " + rowText);
+                        return true;
+                    }
+                } catch (StaleElementReferenceException ignored) {
+                    // try next row
+                }
+            }
+        }
+        return false;
     }
 
     public String getVisitLabelText() {

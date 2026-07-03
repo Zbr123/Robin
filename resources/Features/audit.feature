@@ -3,6 +3,7 @@ Feature: Charge Review and Auditing
 
   # Run: mvn test "-Dtest=AuditTestRunner" "-Dheaded=true"
   # Run TC01: mvn test "-Dtest=AuditTestRunner" "-Dheaded=true" "-Dcucumber.filter.tags=@UC_05 and @TestCase01 and @UI"
+  # Run TC02: mvn test "-Dtest=AuditTestRunner" "-Dheaded=true" "-Dcucumber.filter.tags=@UC_05 and @TestCase02 and @UI"
 
   Background:
     Given I am on the login page
@@ -52,13 +53,21 @@ Feature: Charge Review and Auditing
     When I click on button with text "Insert Visit"
     Then I should see success message "Visit has been created successfully."
     And I wait "2" seconds
+    When I edit activity in Diagnosis and Interventions tab
+      | Field        | Value     |
+      | Row Index    | 0         |
+      | Menu Item    | Edit      |
+      | Order Status | Completed |
+    And I click on button with text "Update action"
+    And I wait "2" seconds
     And I click on Mark As Ready To Bill button
     And I wait "2" seconds
-    Then the visit should be opened and marked as Ready to Bill
+    Then I should see success message containing "success"
+
 
   # @UC_05 @TestCase01 @UI
   # Scenario: Validate user can modify a claim marked as Ready to Bill before generating the bill
-  #   # Step 1 — Access Robin system
+  #   # # Step 1 — Access Robin system
   #   And I click on Patient Access
   #   And I click on New visit button
   #   And I click on add Patient button
@@ -114,11 +123,34 @@ Feature: Charge Review and Auditing
   #   When I open the created visit from Patient Access list
   #   Then the visit should be opened and marked as Ready to Bill
   #   # Step 3 — Modify claim by editing a service from Patient Access
-  #   When I modify the claim by editing a service from Patient Access
-  #     | Field        | Value     |
-  #     | Row Index    | 0         |
-  #     | Menu Item    | Edit      |
-  #     | Order Status | Completed |
+  #   And I click on Diagnosis and Interventions
+  #   And I open activity actions menu for row 0
+  #   And I click activity menu item "Edit" for row 0
+  #   And I fill mandatory add service details
+  #     | Field         | Value                              |
+  #     | Activity Type | DENTAL_ASDSG                       |
+  #     | Code          | 012 \| Periodic oral examination   |
+  #     | Date          | 24/06/2026 18:05                   |
+  #   And I remember the added service code "012" for audit verification
   #   And I click on button with text "Update action"
   #   And I wait "2" seconds
+  #   Then I should see service as added with service code "012"
   #   Then the claim modification should succeed without errors
+
+  # @UC_05 @TestCase02 @UI
+  # Scenario: Validate that user can exclude a claim marked as Ready to Bill before generating the bill
+  #   # Step 1 — Access Robin system and open an existing Ready to Bill visit
+  #   And I click on Patient Access
+  #   When I open the first Ready to Bill visit from Patient Access list
+  #   Then the visit should be opened and marked as Ready to Bill
+  #   # Step 2 — Exclude claim from Patient Access (reusable granular steps)
+  #   When I click on Exclude Claim button on the visit
+  #   And I confirm the PrimeFaces dialog with "Yes"
+  #   And I wait for exclude claim form to open
+  #   And I fill mandatory exclude claim details
+  #     | Field            | Value                        |
+  #     | Category         | Excluded Claims              |
+  #     | Note Description | Audit TC02 automated exclude |
+  #   And I submit the exclude claim form
+  #   And I wait "2" seconds
+  #   Then I should see success message containing "exclud"

@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "C:\\Program Files\\nodejs\\npx.cmd",
+      "args": [
+        "-y",
+        "@playwright/mcp@latest",
+        "--browser=chromium",
+        "--viewport-size=1920,1080",
+        "--allowed-origins=https://auto-robin-qtr.santechture.com"
+      ]
+    }
+  }
+}

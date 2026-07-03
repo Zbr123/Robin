@@ -76,8 +76,71 @@ public class PatientRegistrationSteps {
     @Then("the visit label should be visitor insured or self pay visitor")
     public void theVisitLabelShouldBeVisitorInsuredOrSelfPayVisitor() {
         Assert.assertTrue(patientRegistrationPage.isVisitLabelVisitorInsuredOrSelfPay(),
-                "Visit label should indicate Visitor Insured or Self Pay Visitor. Actual: "
-                        + patientRegistrationPage.getVisitLabelText());
+                "Visit should indicate Visitor Insured or Self Pay Visitor. Billing group: "
+                        + patientRegistrationPage.getBillingGroupText());
+    }
+
+    @Then("the patient should be classified as visitor insured")
+    public void thePatientShouldBeClassifiedAsVisitorInsured() {
+        Assert.assertTrue(patientRegistrationPage.isPatientVisitorInsuredOnEncounter(),
+                "Patient should be classified as visitor insured. Billing group: "
+                        + patientRegistrationPage.getBillingGroupText());
+    }
+
+    @Then("the patient record should be created successfully")
+    public void thePatientRecordShouldBeCreatedSuccessfully() {
+        Assert.assertTrue(patientRegistrationPage.isPatientRecordCreated(),
+                "Patient record should be created and encounter screen should be available.");
+    }
+
+    @And("the ADT visitor fields should be stored on the patient")
+    public void theAdtVisitorFieldsShouldBeStoredOnThePatient() {
+        Assert.assertTrue(patientRegistrationPage.areAdtVisitorFieldsStored(),
+                "Missing QID, passport, visitor sub-category, visa type, and reason for missing QID should be stored.");
+    }
+
+    @And("the patient insurer should be listed on the encounter")
+    public void thePatientInsurerShouldBeListedOnTheEncounter() {
+        Assert.assertTrue(patientRegistrationPage.isPatientInsurerListedOnEncounter(),
+                "Patient insurer should be listed on the auto-created encounter.");
+    }
+
+    @And("the encounter label should be Visitor Insured")
+    public void theEncounterLabelShouldBeVisitorInsured() {
+        Assert.assertTrue(patientRegistrationPage.isEncounterLabelVisitorInsured(),
+                "Encounter label should be Visitor Insured. Billing group: "
+                        + patientRegistrationPage.getBillingGroupText()
+                        + ", visit label: " + patientRegistrationPage.getVisitLabelText());
+    }
+
+    @And("the encounter label should be Self Pay")
+    public void theEncounterLabelShouldBeSelfPay() {
+        Assert.assertTrue(patientRegistrationPage.isEncounterLabelSelfPay(),
+                "Encounter label should indicate Self Pay. Payment type / tag: "
+                        + patientRegistrationPage.getEncounterTagLabel());
+    }
+
+    @And("the encounter label should be Visitor Self Pay")
+    public void theEncounterLabelShouldBeVisitorSelfPay() {
+        Assert.assertTrue(patientRegistrationPage.isEncounterLabelVisitorSelfPay(),
+                "Encounter label should be Visitor Self Pay. Tag: "
+                        + patientRegistrationPage.getEncounterTagLabel());
+    }
+
+    @And("I update the visa type in Edit Patient modal to {string}")
+    public void iUpdateTheVisaTypeInEditPatientModalTo(String newVisaType) {
+        patientRegistrationPage.updateVisaTypeInEditPatientModal(newVisaType, loginPage);
+    }
+
+    @And("I click on Add Insurance Card button in Edit Patient modal")
+    public void iClickOnAddInsuranceCardButtonInEditPatientModal() {
+        patientRegistrationPage.clickAddInsuranceCardInEditPatientModal();
+    }
+
+    @Then("the visa type on the patient should be updated")
+    public void theVisaTypeOnThePatientShouldBeUpdated() {
+        Assert.assertTrue(patientRegistrationPage.isVisaTypeUpdatedOnPatient(),
+                "Visa type should reflect the correction saved from Edit Patient.");
     }
 
     @Then("the patient should have {int} insurance card on the create patient form")
@@ -124,6 +187,46 @@ public class PatientRegistrationSteps {
     @And("I save the Edit Patient modal")
     public void iSaveEditPatientModal() {
         patientRegistrationPage.saveEditPatientModal();
+    }
+
+    @When("I reopen the created visit from Patient Access")
+    public void iReopenTheCreatedVisitFromPatientAccess() {
+        loginPage.closeVisitDialogIfOpen();
+        String mrn = loginPage.getLastRegisteredMrn();
+        loginPage.returnToPatientAccessVisitList();
+        loginPage.searchVisitInPatientAccess(mrn);
+        loginPage.openVisitFromPatientAccessListByMrn(mrn);
+        System.out.println("Reopened created visit from Patient Access for MRN: " + mrn);
+    }
+
+    @And("I save the Edit Patient modal after adding insurance")
+    public void iSaveEditPatientModalAfterAddingInsurance() {
+        patientRegistrationPage.waitForInsuranceCardInEditPatientModal();
+        patientRegistrationPage.saveEditPatientModal();
+    }
+
+    @When("I click on edit insurance card row {int} in Edit Patient modal")
+    public void iClickOnEditInsuranceCardRowInEditPatientModal(int rowIndex) {
+        patientRegistrationPage.clickEditInsuranceCardInEditPatientModal(rowIndex);
+    }
+
+    @And("I update the insurance Member ID in Edit Insurance modal to a new value")
+    public void iUpdateInsuranceMemberIdInEditInsuranceModalToNewValue() {
+        patientRegistrationPage.updateMemberIdInEditInsuranceModal("auto", loginPage);
+    }
+
+    @And("I save the Edit Insurance modal")
+    public void iSaveEditInsuranceModal() {
+        patientRegistrationPage.saveEditInsuranceModal();
+    }
+
+    @Then("the insurance Member ID in Edit Patient insurance list row {int} should match the registered value")
+    public void theInsuranceMemberIdInEditPatientListRowShouldMatch(int rowIndex) {
+        Assert.assertTrue(
+                patientRegistrationPage.isMemberIdListedInEditPatientInsuranceRow(
+                        rowIndex, loginPage.getLastRegisteredMemberId()),
+                "Member ID in Edit Patient insurance list row " + rowIndex
+                        + " should match: " + loginPage.getLastRegisteredMemberId());
     }
 
     @Then("the patient passport on the form should match the registered value")

@@ -1,0 +1,38 @@
+---
+description: ROBIN Selenium + Cucumber test commands and MCP usage for automation
+globs:
+  - resources/Features/**
+  - src/**
+alwaysApply: false
+---
+
+# ROBIN automation (Selenium / Maven)
+
+## App under test
+- URL: `https://auto-robin-qtr.santechture.com/ROBIN`
+- User: `QFacilityAdmin` / `QFacilityAdmin123`
+
+## Run tests (PowerShell)
+```powershell
+# All patient registration scenarios
+mvn test "-Dtest=PatientRegistrationTestRunner" "-Dheaded=true"
+
+# Single tag
+mvn test "-Dtest=PatientRegistrationTestRunner" "-Dheaded=true" "-Dcucumber.filter.tags=@TestCase15 and @UI"
+
+# Other suites
+mvn test "-Dtest=AuditTestRunner" "-Dheaded=true"
+mvn test "-Dtest=BillingTestRunner" "-Dheaded=true"
+mvn test "-Dtest=TestRunner" "-Dheaded=true"
+```
+
+## MCP in Cursor
+- **Playwright MCP** (`.cursor/mcp.json`): explore ROBIN UI, find locators, debug flows in a real browser from chat.
+- **Browser MCP** (built-in): use `browser_navigate` → `browser_snapshot` → click/fill for quick UI checks without writing code first.
+
+After editing `mcp.json`, open **Cursor Settings → Tools & MCP** and enable **playwright**, or restart Cursor.
+
+## When adding scenarios
+- Keep Gherkin in `resources/Features/`
+- Reuse existing steps in `src/test/java/stepDefinitions/`
+- Prefer stable IDs (`InvoiceForm:PatientTypeCash`, `AccumedPatientCreateForm:*`) over brittle XPath

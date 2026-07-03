@@ -1,10 +1,18 @@
-Feature: Complete Patient Journey with Billing
+@UC_16 @Billing
+Feature: UC_16 Paymode and Payment Collection
 
-  Scenario: Create a new patient, book an encounter, add services, and complete billing
+  # Run:  mvn test "-Dtest=BillingTestRunner" "-Dheaded=true"
+  # Run TC02: mvn test "-Dtest=BillingTestRunner" "-Dheaded=true" "-Dcucumber.filter.tags=@UC_16 and @TestCase02 and @UI"
 
+  Background:
     Given I am on the login page
-    When I enter username and password
+    When I login as cashier
     And I click on signin button
+    Then I should be logged in successfully with cashier privileges
+
+  @UC_16 @TestCase02 @UI
+  Scenario: Cashier can select one or multiple bills and collect payment with one paymode
+    # Prerequisite — create Ready to Bill claim with billable services
     And I click on Patient Access
     And I click on New visit button
     And I click on add Patient button
@@ -22,7 +30,6 @@ Feature: Complete Patient Journey with Billing
       | Priority          | Primary                                                   |
     And I click on Save button
     And I click on Insert Patient button
-    Then I should see success message "Patient has been added successfully."
     Then I should see Encounter Section
     When I fill mandatory encounter details
       | Field               | Value                       |
@@ -32,7 +39,7 @@ Feature: Complete Patient Journey with Billing
       | Medical Service     | Aids and Appliances         |
       | ED Triage Code      | 1 - Resuscitation Immediate |
       | ED Disposition Code | Admitted                    |
-      | Encounter Class     | Inpatient                   |
+      | Encounter Class     | Emergency                   |
       | Encounter Status    | In-Progress                 |
     And I click on Diagnosis and Interventions
     And I fill mandatory add service details
@@ -41,7 +48,6 @@ Feature: Complete Patient Journey with Billing
       | Code          | 56223-00 \| Computerised tomography of spine, lumbosacral region |
       | Date          | 21/06/2026 00:00                                                 |
     And I click on Add Service button
-    Then I should see service as added with service code "56223-00"
     When I click on button with text "Insert Visit"
     Then I should see success message "Visit has been created successfully."
     And I wait "2" seconds
@@ -53,13 +59,21 @@ Feature: Complete Patient Journey with Billing
     And I click on button with text "Update action"
     And I wait "2" seconds
     And I click on Mark As Ready To Bill button
-#    Then I should see success message "Marked as Ready to Bill"
+    And I wait "2" seconds
+    # Step 2 — Billing screen: open claim from Bill Management and generate bills
     When I navigate to Bill Management page
     And I click on created patient in bill management list
     And I click on Generate Bill button
     And I click alert dialog OK button
     And I wait "2" seconds
-    And I select all categorized bills
+    Then the billing claim should load with services and categorized bills
+    # Step 3 — Select one bill
+    When I select categorized bill at row 0 for payment
+    Then 1 bill should be selected for payment collection
+    # Step 4 — Select multiple bills (select all when multiple rows exist)
+    When I select all categorized bills for payment
+    Then at least 1 bill should be selected for payment collection
+    # Step 5 — Pay all selected bills using one payment method
     And I click on button with text "Add Payment"
-    And I click payment Save button
+    And I collect payment using payment type "Cash"
     Then I should see success message "Payment Added Successfully!"

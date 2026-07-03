@@ -37,6 +37,11 @@ public class AuditSteps {
         auditPage.openCreatedVisitFromPatientAccessList();
     }
 
+    @When("I open the first Ready to Bill visit from Patient Access list")
+    public void iOpenTheFirstReadyToBillVisitFromPatientAccessList() {
+        auditPage.openFirstReadyToBillVisitFromPatientAccess();
+    }
+
     @Then("the visit should show Ready to Bill in Patient Access list")
     public void theVisitShouldShowReadyToBillInPatientAccessList() {
         String mrn = loginPage.getLastRegisteredMrn();
@@ -55,6 +60,31 @@ public class AuditSteps {
         auditPage.modifyClaimByEditingService(toMap(dataTable));
     }
 
+    @When("I click on Exclude Claim button on the visit")
+    public void iClickOnExcludeClaimButtonOnTheVisit() {
+        auditPage.clickExcludeClaimToolbarButton();
+    }
+
+    @And("I confirm the exclude claim confirmation dialog")
+    public void iConfirmTheExcludeClaimConfirmationDialog() {
+        auditPage.confirmExcludeClaimDialogYes();
+    }
+
+    @When("I exclude claim on the open visit with details")
+    public void iExcludeClaimOnTheOpenVisitWithDetails(DataTable dataTable) {
+        auditPage.excludeClaimOnOpenVisit(toMap(dataTable));
+    }
+
+    @And("I fill mandatory exclude claim details")
+    public void iFillMandatoryExcludeClaimDetails(DataTable dataTable) {
+        auditPage.fillExcludeClaimForm(toMap(dataTable));
+    }
+
+    @And("I submit the exclude claim form")
+    public void iSubmitTheExcludeClaimForm() {
+        auditPage.submitExcludeClaimForm();
+    }
+
     @And("I remember the added service code {string} for audit verification")
     public void iRememberTheAddedServiceCodeForAuditVerification(String serviceCode) {
         auditPage.rememberServiceCode(serviceCode);
@@ -64,6 +94,11 @@ public class AuditSteps {
     public void theClaimModificationShouldSucceedWithoutErrors() {
         Assert.assertTrue(auditPage.isClaimModificationSuccessful(),
                 "Claim should be modifiable while Ready to Bill — update must succeed without errors.");
+    }
+
+    @Then("I should see success message containing {string}")
+    public void iShouldSeeSuccessMessageContaining(String partialMessage) {
+        loginPage.verifyGrowlSuccessMessageContaining(partialMessage);
     }
 
     private static LinkedHashMap<String, String> toMap(DataTable dataTable) {

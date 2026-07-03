@@ -33,6 +33,7 @@ public class LoginPage {
     }
     private String randomFirstName;
     private String randomLastName;
+    private static String lastRegisteredMemberId;
     private static String lastRegisteredMrn;
 
     // Locators
@@ -73,8 +74,6 @@ public class LoginPage {
             "//div[contains(@id,'nationality')][contains(@class,'ui-selectonemenu-panel')]");
     /** Exact panel id for Accumed nationality selectOneMenu (avoids matching hidden panels). */
     private By nationalityDropdownPanelById = By.cssSelector("[id='AccumedPatientCreateForm:nationality_panel']");
-    private By genderDropdown = By.xpath("//div[@id='AccumedPatientCreateForm:genderId']//span[contains(@class, 'ui-icon-triangle-1-s')]");
-    private By genderOption = By.xpath("//li[text()='Male']");
     private By addInsuranceCardButton = By.xpath("//button[@id='AccumedPatientCreateForm:createButtonInsurance']");
     /** Add Insurance modal: Receiver dropdown (label id from DevTools). */
     private By addInsuranceModalReceiverLabel = By.id("AccumedPatientInsuranceCreateForm:insuranceLisence_label");
@@ -482,33 +481,20 @@ public class LoginPage {
         return lastRegisteredMrn;
     }
 
+    public void rememberRegisteredMrn(String mrn) {
+        if (mrn != null && !mrn.isBlank()) {
+            lastRegisteredMrn = mrn.trim();
+        }
+    }
+
 
     public void selectNationalityAmerican() {
-        selectNationality("AMERICAN");
+        selectSelectOneMenuOptionWithRetry("AccumedPatientCreateForm:nationality", "AMERICAN");
     }
 
     /** Opens nationality selectOneMenu and picks an option matching {@code searchText} (label or filter). */
     public void selectNationality(String searchText) {
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
-        WebElement opener = findNationalityDropdownOpener(wait);
-        scrollToElement(opener);
-        opener.click();
-
-        WebElement panel = waitForVisibleNationalityPanel(wait);
-        tryApplyNationalityFilter(panel, searchText);
-        WebElement option = findNationalityOptionInsidePanel(panel, wait, searchText);
-        ((JavascriptExecutor) driver).executeScript(
-                "arguments[0].scrollIntoView({block:'center', inline:'nearest'});", option);
-        clickListOption(option);
-        try {
-            wait.until(ExpectedConditions.invisibilityOfElementLocated(nationalityDropdownPanelById));
-        } catch (Exception e1) {
-            try {
-                wait.until(ExpectedConditions.invisibilityOfElementLocated(nationalityDropdownPanel));
-            } catch (Exception ignored) {
-                // panel may stay in DOM with display:none
-            }
-        }
+        selectSelectOneMenuOptionWithRetry("AccumedPatientCreateForm:nationality", searchText.trim());
     }
 
     /** Create Patient form — selectOneMenu by label text or numeric list index. */
@@ -674,17 +660,42 @@ public class LoginPage {
     }
 
     public void selectGender() {
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
-        WebElement trigger = wait.until(ExpectedConditions.elementToBeClickable(genderDropdown));
-        scrollToElement(trigger);
-        trigger.click();
-        WebElement option = wait.until(ExpectedConditions.elementToBeClickable(genderOption));
-        clickListOption(option);
+        selectGender("Male");
+    }
+
+    /** Create Patient form — gender selectOneMenu (Male/Female). */
+    public void selectGender(String gender) {
+        if (gender == null || gender.isBlank()) {
+            gender = "Male";
+        }
+        selectCreatePatientDropdown("AccumedPatientCreateForm:genderId", gender.trim());
     }
 
     // **Method to Click "Add Insurance Card"**
     public void clickAddInsuranceCard() {
-        WebElement button = waitForElementToBeClickable(addInsuranceCardButton);
+        By[] buttons = {
+                By.id("AccumedPatientCreateForm:createButtonInsurance"),
+                By.id("AccumedPatientEditForm:createButtonInsurance")
+        };
+        WebElement button = null;
+        for (By by : buttons) {
+            for (WebElement candidate : driver.findElements(by)) {
+                try {
+                    if (candidate.isDisplayed() && candidate.isEnabled()) {
+                        button = candidate;
+                        break;
+                    }
+                } catch (StaleElementReferenceException ignored) {
+                    // try next
+                }
+            }
+            if (button != null) {
+                break;
+            }
+        }
+        if (button == null) {
+            button = waitForElementToBeClickable(addInsuranceCardButton);
+        }
         scrollToElement(button);
         button.click();
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20));
@@ -721,6 +732,7 @@ public class LoginPage {
         scrollToElement(memberField);
         memberField.clear();
         memberField.sendKeys(randomMemberId);
+        lastRegisteredMemberId = randomMemberId;
         System.out.println("Add Insurance modal: Member ID filled.");
         String receiver = mapGet(fields, "Receiver");
         if (receiver != null && !receiver.isEmpty()) {
@@ -978,6 +990,24 @@ public class LoginPage {
             }
         }
         return String.format("%04d", (Integer.parseInt(avoid, 10) + 1) % 10000);
+    }
+
+    public String getLastRegisteredMemberId() {
+        return lastRegisteredMemberId;
+    }
+
+    /** Generates a new 4-digit Member ID different from the last registered value. */
+    public String generateAndRememberDifferentMemberId() {
+        String current = lastRegisteredMemberId != null ? lastRegisteredMemberId : "";
+        String candidate = randomFourDigitsDifferentFrom(current);
+        lastRegisteredMemberId = candidate;
+        System.out.println("Generated updated Member ID: " + candidate
+                + (current.isEmpty() ? "" : " (was: " + current + ")"));
+        return candidate;
+    }
+
+    public void rememberRegisteredMemberId(String memberId) {
+        lastRegisteredMemberId = memberId != null ? memberId.trim() : "";
     }
 
     private static String mapGet(Map<String, String> fields, String wantedKey) {
@@ -1398,6 +1428,15 @@ public class LoginPage {
     public void waitForInsertPatientButtonReady() {
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
         wait.until(ExpectedConditions.elementToBeClickable(insertPatientButton));
+    }
+
+    public boolean isCreatePatientInsertButtonVisible() {
+        try {
+            WebElement btn = driver.findElement(insertPatientButton);
+            return btn.isDisplayed() && btn.isEnabled();
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     public void clickInsertPatientButton() {
@@ -2078,10 +2117,18 @@ public class LoginPage {
         wait.until(ExpectedConditions.visibilityOfElementLocated(activityCodeInput));
     }
 
+    private static By activityListDataBody() {
+        return By.id("AccumedHaadActivityListForm:datalist_data");
+    }
+
+    private static By activityRowByIndex(int rowIndex) {
+        return By.xpath("//tbody[@id='AccumedHaadActivityListForm:datalist_data']"
+                + "//tr[@data-ri='" + rowIndex + "']");
+    }
+
     private static By activityRowActionsMenuButton(int rowIndex) {
-        int row = rowIndex + 1;
-        return By.xpath("//tbody[contains(@id,'AccumedHaadActivityListForm:datalist')]"
-                + "//tr[" + row + "]//button[.//span[contains(@class,'pi-ellipsis-v')]]");
+        return By.xpath("//tbody[@id='AccumedHaadActivityListForm:datalist_data']"
+                + "//tr[@data-ri='" + rowIndex + "']//span[contains(@class,'ui-menubutton')]//button");
     }
 
     private static String activityMenuActionIdSuffix(String menuItemText) {
@@ -2125,6 +2172,11 @@ public class LoginPage {
     }
 
     public void clickActivityRowActionsMenu(WebDriverWait wait, int rowIndex) {
+        wait.until(ExpectedConditions.visibilityOfElementLocated(activityListDataBody()));
+        WebElement row = wait.until(ExpectedConditions.presenceOfElementLocated(activityRowByIndex(rowIndex)));
+        ((JavascriptExecutor) driver).executeScript(
+                "arguments[0].scrollIntoView({block:'center', inline:'end'});", row);
+        sleepQuietMs(300);
         WebElement btn = wait.until(ExpectedConditions.elementToBeClickable(activityRowActionsMenuButton(rowIndex)));
         scrollToElement(btn);
         try {
@@ -2132,30 +2184,60 @@ public class LoginPage {
         } catch (ElementClickInterceptedException e) {
             ((JavascriptExecutor) driver).executeScript("arguments[0].click();", btn);
         }
-        sleepQuietMs(400);
+        wait.until(d -> isActivityRowMenuVisible(rowIndex));
+        sleepQuietMs(300);
         System.out.println("Activity: opened actions menu for row " + rowIndex + ".");
+    }
+
+    private boolean isActivityRowMenuVisible(int rowIndex) {
+        By editInRow = activityRowMenuActionLink(rowIndex, "Edit");
+        for (WebElement link : driver.findElements(editInRow)) {
+            try {
+                if (link.isDisplayed()) {
+                    return true;
+                }
+            } catch (StaleElementReferenceException ignored) {
+                // try next
+            }
+        }
+        for (WebElement menu : driver.findElements(By.xpath(
+                "//div[contains(@class,'ui-menu') and contains(@class,'ui-menubutton')]"
+                        + "[not(contains(@style,'display: none'))]"))) {
+            try {
+                if (menu.isDisplayed()) {
+                    return true;
+                }
+            } catch (StaleElementReferenceException ignored) {
+                // try next
+            }
+        }
+        return false;
     }
 
     public void clickActivityMenuItem(WebDriverWait wait, int rowIndex, String menuItemText) {
         By idBy = activityRowMenuActionLink(rowIndex, menuItemText);
-        WebElement item;
-        try {
-            item = wait.until(ExpectedConditions.elementToBeClickable(idBy));
-        } catch (org.openqa.selenium.TimeoutException e) {
-            By itemBy = activityMenuItemLink(menuItemText);
-            item = wait.until(d -> {
-                for (WebElement link : d.findElements(itemBy)) {
-                    try {
-                        if (link.isDisplayed()) {
-                            return link;
-                        }
-                    } catch (StaleElementReferenceException ignored) {
-                        // next
+        WebElement item = wait.until(d -> {
+            for (WebElement link : d.findElements(idBy)) {
+                try {
+                    if (link.isDisplayed()) {
+                        return link;
                     }
+                } catch (StaleElementReferenceException ignored) {
+                    // next
                 }
-                return null;
-            });
-        }
+            }
+            By itemBy = activityMenuItemLink(menuItemText);
+            for (WebElement link : d.findElements(itemBy)) {
+                try {
+                    if (link.isDisplayed()) {
+                        return link;
+                    }
+                } catch (StaleElementReferenceException ignored) {
+                    // next
+                }
+            }
+            return null;
+        });
         scrollToElement(item);
         try {
             item.click();
@@ -2165,14 +2247,38 @@ public class LoginPage {
         System.out.println("Activity: clicked menu item '" + menuItemText + "'.");
     }
 
-    /** Edit-mode fields: Order Status ({@code activityOrderStatusEditMode}). */
+    /** Edit-mode fields: Activity Type, Code, Date, Order Status (same widgets as add-service row). */
     public void fillEditActivityDetails(WebDriverWait wait, Map<String, String> fields) {
+        wait.until(ExpectedConditions.or(
+                ExpectedConditions.visibilityOfElementLocated(By.id(ACTIVITY_ORDER_STATUS_EDIT_WIDGET)),
+                ExpectedConditions.visibilityOfElementLocated(activityCodeInput)));
+        fillActivityServiceFields(wait, fields);
         String orderStatus = mapGet(fields, "Order Status");
         if (orderStatus != null && !orderStatus.isBlank()) {
             wait.until(ExpectedConditions.visibilityOfElementLocated(By.id(ACTIVITY_ORDER_STATUS_EDIT_WIDGET)));
             selectSelectOneMenuOption(ACTIVITY_ORDER_STATUS_EDIT_WIDGET, orderStatus.trim());
             System.out.println("Activity edit: Order Status selected -> " + orderStatus.trim());
         }
+    }
+
+    /**
+     * Opens row actions (⋮) → Edit on the current Diagnosis tab (no tab navigation).
+     */
+    public void editActivityInCurrentDiagnosisTab(Map<String, String> fields) {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        wait.until(ExpectedConditions.visibilityOfElementLocated(activityListDataBody()));
+        int rowIndex = 0;
+        String rowStr = mapGet(fields, "Row Index");
+        if (rowStr != null && !rowStr.isBlank()) {
+            rowIndex = Integer.parseInt(rowStr.trim());
+        }
+        String menuItem = mapGet(fields, "Menu Item");
+        if (menuItem == null || menuItem.isBlank()) {
+            menuItem = "Edit";
+        }
+        clickActivityRowActionsMenu(wait, rowIndex);
+        clickActivityMenuItem(wait, rowIndex, menuItem.trim());
+        fillEditActivityDetails(wait, fields);
     }
 
     /**
@@ -2183,7 +2289,10 @@ public class LoginPage {
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
         wait.until(ExpectedConditions.visibilityOfElementLocated(activityCodeInput));
         scrollToElement(driver.findElement(activityCodeInput));
+        fillActivityServiceFields(wait, fields);
+    }
 
+    private void fillActivityServiceFields(WebDriverWait wait, Map<String, String> fields) {
         String activityType = mapGet(fields, "Activity Type");
         if (activityType != null && !activityType.isBlank()) {
             selectEncounterFormDropdown(wait, ACTIVITY_TYPE_WIDGET, ACTIVITY_TYPE_SELECT_ID, activityType.trim());
@@ -2195,7 +2304,7 @@ public class LoginPage {
                     return false;
                 }
             });
-            System.out.println("Add Service: Activity Type selected.");
+            System.out.println("Activity: Activity Type selected -> " + activityType.trim());
         }
         String code = mapGet(fields, "Code");
         if (code != null && !code.isBlank()) {
@@ -2205,7 +2314,7 @@ public class LoginPage {
         if (date != null && !date.isBlank()) {
             WebElement dateInput = wait.until(ExpectedConditions.elementToBeClickable(activityStartDateInput));
             setEncounterTextInputWithRetry(dateInput, date.trim());
-            System.out.println("Add Service: Date filled.");
+            System.out.println("Activity: Date filled -> " + date.trim());
         }
     }
 
@@ -2529,7 +2638,8 @@ public class LoginPage {
     }
 
     public void navigateToBillManagementPage() {
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20));
+        closeVisitDialogIfOpen();
         waitForBlockingOverlaysToClose(new WebDriverWait(driver, Duration.ofSeconds(30)));
         WebElement billing = wait.until(ExpectedConditions.presenceOfElementLocated(billingMenuLink));
         clickElementWithJsFallback(billing);
@@ -2541,23 +2651,82 @@ public class LoginPage {
     }
 
     public void clickCreatedPatientInBillManagementList() {
-        String fullName = randomFirstName + " " + randomLastName;
-        By patientLink = By.xpath("//a[contains(@id,'patient_FullNameCol')][contains(normalize-space(.), "
-                + xpathLiteral(fullName) + ")]");
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
-        WebElement link = wait.until(ExpectedConditions.elementToBeClickable(patientLink));
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(45));
+        String fullName = (randomFirstName + " " + randomLastName).trim();
+        String mrn = lastRegisteredMrn;
+        if (mrn != null && !mrn.isBlank()) {
+            searchVisitInPatientAccess(mrn);
+        }
+        WebElement link = wait.until(d -> findCreatedPatientLinkInWorklist(d, mrn, fullName));
         scrollToElement(link);
         try {
             link.click();
         } catch (ElementClickInterceptedException e) {
             ((JavascriptExecutor) driver).executeScript("arguments[0].click();", link);
         }
-        System.out.println("Clicked patient in Bill Management: " + fullName);
+        waitForBlockingOverlaysToClose(new WebDriverWait(driver, Duration.ofSeconds(60)));
+        wait.until(ExpectedConditions.or(
+                ExpectedConditions.visibilityOfElementLocated(encounterSection),
+                ExpectedConditions.visibilityOfElementLocated(patientAndEncounterScreen),
+                ExpectedConditions.presenceOfElementLocated(generateBillButton)));
+        System.out.println("Clicked patient in Bill Management: " + fullName
+                + (mrn != null && !mrn.isBlank() ? " (MRN: " + mrn + ")" : ""));
+    }
+
+    private WebElement findCreatedPatientLinkInWorklist(WebDriver driver, String mrn, String fullName) {
+        String upperName = fullName.toUpperCase();
+        if (mrn != null && !mrn.isBlank()) {
+            for (WebElement link : driver.findElements(By.xpath(
+                    "//tbody[@id='phWLForm:phWLTbl_data']//tr[.//span[contains(@id,'mrnCol')]"
+                            + "[normalize-space()=" + xpathLiteral(mrn.trim()) + "]]//a"))) {
+                if (isDisplayedAndEnabled(link)) {
+                    return link;
+                }
+            }
+        }
+        By[] namePatterns = {
+                By.xpath("//tbody[@id='phWLForm:phWLTbl_data']//a[contains(@id,'patientNameLink')]"
+                        + "[contains(translate(normalize-space(.),"
+                        + "'abcdefghijklmnopqrstuvwxyz','ABCDEFGHIJKLMNOPQRSTUVWXYZ'),"
+                        + xpathLiteral(upperName) + ")]"),
+                By.xpath("//tbody[@id='phWLForm:phWLTbl_data']//a[contains(@id,'patient_FullNameCol')]"
+                        + "[contains(translate(normalize-space(.),"
+                        + "'abcdefghijklmnopqrstuvwxyz','ABCDEFGHIJKLMNOPQRSTUVWXYZ'),"
+                        + xpathLiteral(upperName) + ")]"),
+                By.xpath("//a[contains(@id,'patientNameLink') or contains(@id,'patient_FullNameCol')]"
+                        + "[contains(translate(normalize-space(.),"
+                        + "'abcdefghijklmnopqrstuvwxyz','ABCDEFGHIJKLMNOPQRSTUVWXYZ'),"
+                        + xpathLiteral(upperName) + ")]")
+        };
+        for (By pattern : namePatterns) {
+            for (WebElement link : driver.findElements(pattern)) {
+                if (isDisplayedAndEnabled(link)) {
+                    return link;
+                }
+            }
+        }
+        return null;
+    }
+
+    private boolean isDisplayedAndEnabled(WebElement element) {
+        try {
+            return element.isDisplayed() && element.isEnabled();
+        } catch (StaleElementReferenceException e) {
+            return false;
+        }
     }
 
     public void clickGenerateBillButton() {
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
-        WebElement btn = wait.until(ExpectedConditions.elementToBeClickable(generateBillButton));
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(30));
+        waitForBlockingOverlaysToClose(wait);
+        WebElement btn = wait.until(d -> {
+            for (WebElement candidate : d.findElements(generateBillButton)) {
+                if (isDisplayedAndEnabled(candidate)) {
+                    return candidate;
+                }
+            }
+            return null;
+        });
         scrollToElement(btn);
         try {
             btn.click();
@@ -2618,6 +2787,28 @@ public class LoginPage {
     public void verifyGrowlSuccessMessage(String expectedMessage) {
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
         wait.until(ExpectedConditions.visibilityOfElementLocated(growlTitleLocator(expectedMessage)));
+    }
+
+    /** Waits until a visible growl success message contains {@code partialMessage}. */
+    public void verifyGrowlSuccessMessageContaining(String partialMessage) {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20));
+        String expected = normalizeMessageText(partialMessage).toLowerCase();
+        wait.until(d -> {
+            for (WebElement element : d.findElements(By.cssSelector("span.ui-growl-title"))) {
+                try {
+                    if (element.isDisplayed()) {
+                        String text = normalizeMessageText(element.getText()).toLowerCase();
+                        if (text.contains(expected)) {
+                            System.out.println("Verified growl success message: " + element.getText().trim());
+                            return true;
+                        }
+                    }
+                } catch (StaleElementReferenceException ignored) {
+                    // try next
+                }
+            }
+            return false;
+        });
     }
 
     /** Waits until a visible inline or growl error contains {@code expectedMessage}. */
@@ -2828,6 +3019,187 @@ public class LoginPage {
                 ExpectedConditions.visibilityOfElementLocated(encounterSection),
                 ExpectedConditions.visibilityOfElementLocated(patientAndEncounterScreen)));
         System.out.println("Opened visit from Patient Access list for MRN: " + mrn);
+    }
+
+    private static final By firstReadyToBillVisitLink = By.xpath(
+            "//tbody[@id='phWLForm:phWLTbl_data']//tr[.//span[contains(@id,'billing_Status')]"
+                    + "[contains(translate(normalize-space(.),"
+                    + "'abcdefghijklmnopqrstuvwxyz','ABCDEFGHIJKLMNOPQRSTUVWXYZ'),'READY TO BILL')]]"
+                    + "//a[contains(@id,'patientNameLink')]");
+
+    /** Opens the first visit with Bill Status Ready to Bill from Checked-in Visits. */
+    public void openFirstReadyToBillVisitFromPatientAccess() {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20));
+        wait.until(ExpectedConditions.visibilityOfElementLocated(By.id("phWLForm:phWLTbl_data")));
+        WebElement link = wait.until(ExpectedConditions.elementToBeClickable(firstReadyToBillVisitLink));
+        scrollToElement(link);
+        try {
+            link.click();
+        } catch (ElementClickInterceptedException e) {
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", link);
+        }
+        waitForBlockingOverlaysToClose(new WebDriverWait(driver, Duration.ofSeconds(60)));
+        wait.until(ExpectedConditions.or(
+                ExpectedConditions.visibilityOfElementLocated(encounterSection),
+                ExpectedConditions.visibilityOfElementLocated(patientAndEncounterScreen)));
+        System.out.println("Opened first Ready to Bill visit from Patient Access list.");
+    }
+
+    private static final By excludeClaimToolbarButton = By.xpath(
+            "//form[contains(@id,'actionsFormInvoice')]//button[.//span[normalize-space()='Exclude Claim']]"
+                    + " | //button[contains(@onclick,'ExcludeClaimWid')][.//span[normalize-space()='Exclude Claim']]"
+                    + " | //button[contains(@data-pfconfirmcommand,'ExcludeClaimForm')]"
+                    + "[.//span[normalize-space()='Exclude Claim']]");
+
+    public void clickExcludeClaimToolbarButton() {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        WebElement btn = wait.until(ExpectedConditions.elementToBeClickable(excludeClaimToolbarButton));
+        scrollToElement(btn);
+        try {
+            btn.click();
+        } catch (ElementClickInterceptedException e) {
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", btn);
+        }
+        try {
+            wait.until(this::findVisibleConfirmDialogYesButton);
+        } catch (org.openqa.selenium.TimeoutException ignored) {
+            // confirm dialog may appear on the next step
+        }
+        System.out.println("Clicked Exclude Claim toolbar button.");
+    }
+
+    public void clickPrimeFacesConfirmDialogButton(String buttonLabel) {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20));
+        String label = buttonLabel.trim();
+        WebElement btn = wait.until(d -> findVisiblePrimeFacesConfirmDialogButton(d, label));
+        clickElementWithJsFallback(btn);
+        System.out.println("Clicked PrimeFaces confirm dialog button: " + label);
+    }
+
+    public void waitForExcludeClaimForm() {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20));
+        wait.until(ExpectedConditions.or(
+                ExpectedConditions.visibilityOfElementLocated(By.id("ExcludeClaimForm")),
+                ExpectedConditions.visibilityOfElementLocated(By.xpath(
+                        "//div[contains(@id,'ExcludeClaim') and contains(@class,'ui-dialog')]"
+                                + "[contains(@style,'display: block') or @aria-hidden='false']"))));
+        waitForBlockingOverlaysToClose(new WebDriverWait(driver, Duration.ofSeconds(30)));
+        System.out.println("Exclude claim form is open.");
+    }
+
+    private WebElement findVisibleConfirmDialogYesButton(WebDriver webDriver) {
+        By[] locators = {
+                By.id("phWLForm:confirmI"),
+                By.cssSelector("button.ui-confirmdialog-yes"),
+                By.xpath("//div[contains(@class,'ui-dialog-footer')]//button[.//span[normalize-space()='Yes']]")
+        };
+        for (By locator : locators) {
+            for (WebElement candidate : webDriver.findElements(locator)) {
+                try {
+                    if (candidate.isDisplayed() && candidate.isEnabled()) {
+                        return candidate;
+                    }
+                } catch (StaleElementReferenceException ignored) {
+                    // re-find on next poll
+                }
+            }
+        }
+        return null;
+    }
+
+    private WebElement findVisiblePrimeFacesConfirmDialogButton(WebDriver webDriver, String buttonLabel) {
+        if ("Yes".equalsIgnoreCase(buttonLabel)) {
+            return findVisibleConfirmDialogYesButton(webDriver);
+        }
+        if ("No".equalsIgnoreCase(buttonLabel)) {
+            By[] noLocators = {
+                    By.cssSelector("button.ui-confirmdialog-no"),
+                    By.xpath("//div[contains(@class,'ui-dialog-footer')]//button[.//span[normalize-space()='No']]")
+            };
+            for (By locator : noLocators) {
+                for (WebElement candidate : webDriver.findElements(locator)) {
+                    try {
+                        if (candidate.isDisplayed() && candidate.isEnabled()) {
+                            return candidate;
+                        }
+                    } catch (StaleElementReferenceException ignored) {
+                        // re-find on next poll
+                    }
+                }
+            }
+            return null;
+        }
+        String literal = xpathLiteral(buttonLabel);
+        for (WebElement candidate : webDriver.findElements(By.xpath(
+                "//div[contains(@class,'ui-dialog-footer')]//button[.//span[normalize-space()="
+                        + literal + "]]"))) {
+            try {
+                if (candidate.isDisplayed() && candidate.isEnabled()) {
+                    return candidate;
+                }
+            } catch (StaleElementReferenceException ignored) {
+                // re-find on next poll
+            }
+        }
+        return null;
+    }
+
+    public void confirmExcludeClaimDialogYes() {
+        clickPrimeFacesConfirmDialogButton("Yes");
+        waitForExcludeClaimForm();
+        System.out.println("Confirmed exclude claim dialog with Yes.");
+    }
+
+    private String excludeClaimFormWidgetId(String fieldToken) {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        String xpath = "NoteDescription".equals(fieldToken)
+                ? "//form[@id='ExcludeClaimForm']//div[contains(@id,':NoteDescription')"
+                        + " and not(contains(@id,'TextArea')) and contains(@class,'ui-selectonemenu')]"
+                : "//form[@id='ExcludeClaimForm']//div[contains(@id,'" + fieldToken + "')"
+                        + " and contains(@class,'ui-selectonemenu') and not(contains(@class,'ui-selectonemenu-panel'))]";
+        WebElement widget = wait.until(ExpectedConditions.presenceOfElementLocated(By.xpath(xpath)));
+        return widget.getAttribute("id");
+    }
+
+    public void fillExcludeClaimForm(Map<String, String> fields) {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        wait.until(ExpectedConditions.visibilityOfElementLocated(By.id("ExcludeClaimForm")));
+        String category = mapGet(fields, "Category");
+        if (category != null && !category.isBlank()) {
+            selectSelectOneMenuOptionWithRetry(excludeClaimFormWidgetId("ActionCategories"), category.trim());
+            sleepQuietMs(800);
+        }
+        String preTextNote = mapGet(fields, "PreText Note");
+        if (preTextNote != null && !preTextNote.isBlank()) {
+            selectSelectOneMenuOptionWithRetry(excludeClaimFormWidgetId("NoteDescription"), preTextNote.trim());
+        }
+        String noteDescription = mapGet(fields, "Note Description");
+        if (noteDescription != null && !noteDescription.isBlank()) {
+            WebElement textarea = wait.until(ExpectedConditions.elementToBeClickable(By.xpath(
+                    "//form[@id='ExcludeClaimForm']//textarea[contains(@id,'NoteDescriptionTextArea')]")));
+            scrollToElement(textarea);
+            textarea.clear();
+            textarea.sendKeys(noteDescription.trim());
+        }
+        System.out.println("Filled exclude claim form.");
+    }
+
+    public void submitExcludeClaimForm() {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        WebElement btn = wait.until(ExpectedConditions.elementToBeClickable(By.xpath(
+                "//form[@id='ExcludeClaimForm']//button[.//span[normalize-space()='Exclude Claim']]")));
+        clickElementWithJsFallback(btn);
+        waitForBlockingOverlaysToClose(new WebDriverWait(driver, Duration.ofSeconds(60)));
+        System.out.println("Submitted exclude claim form.");
+    }
+
+    /** Clicks Exclude Claim, confirms Yes, fills the form, and submits. */
+    public void excludeClaimOnOpenVisit(Map<String, String> fields) {
+        clickExcludeClaimToolbarButton();
+        clickPrimeFacesConfirmDialogButton("Yes");
+        waitForExcludeClaimForm();
+        fillExcludeClaimForm(fields);
+        submitExcludeClaimForm();
     }
 
     public boolean isActivityOrderStatusDisplayedInList(int rowIndex, String expectedStatus) {

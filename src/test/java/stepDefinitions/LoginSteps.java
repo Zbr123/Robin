@@ -153,7 +153,9 @@ public class LoginSteps {
     public void iClickOnSaveButton() {
         loginPage.clickSaveInsuranceCard();
         System.out.println("Clicked on the Save button.");
-        loginPage.waitForInsertPatientButtonReady();
+        if (loginPage.isCreatePatientInsertButtonVisible()) {
+            loginPage.waitForInsertPatientButtonReady();
+        }
     }
 
     @And("I click on Insert Patient button")
@@ -273,6 +275,16 @@ public class LoginSteps {
     @Then("I should see the {string} error")
     public void iShouldSeeTheError(String expectedError) {
         loginPage.verifyErrorMessageDisplayed(expectedError);
+    }
+
+    @And("I confirm the PrimeFaces dialog with {string}")
+    public void iConfirmThePrimeFacesDialogWith(String buttonLabel) {
+        loginPage.clickPrimeFacesConfirmDialogButton(buttonLabel);
+    }
+
+    @And("I wait for exclude claim form to open")
+    public void iWaitForExcludeClaimFormToOpen() {
+        loginPage.waitForExcludeClaimForm();
     }
 
     @When("I edit activity in Diagnosis and Interventions tab")
