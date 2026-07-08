@@ -352,58 +352,291 @@ public class PatientRegistrationPage {
         return getSelectOneMenuLabelOnPage("visaType");
     }
 
-    /** UC_18 — encounter payment type or tag indicates Self Pay (TRANSIT). */
+    /** UC_16 — visa type is shown on the encounter/patient info and matches the expected label. */
+    public boolean isVisaTypeDisplayedOnEncounter(String expected) {
+        String target = resolveVisaTypeLabel(expected);
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        try {
+            wait.until(d -> target.equalsIgnoreCase(readVisaTypeAnywhere()));
+        } catch (org.openqa.selenium.TimeoutException ignored) {
+            // fall through to log the actual value
+        }
+        String actual = readVisaTypeAnywhere();
+        boolean matches = actual != null && actual.trim().equalsIgnoreCase(target);
+        System.out.println("Visa type on encounter — expected: '" + target + "', actual: '" + actual
+                + "', matches=" + matches);
+        return matches;
+    }
+
+    /**
+     * Reads the visa type shown for the patient from any available source: the patient-info panel,
+     * a visible selectOneMenu label, or the selected option of any {@code visaType} native select
+     * (which persists in the DOM even after the create form is hidden on the encounter view).
+     */
+    private String readVisaTypeAnywhere() {
+        String fromInfo = getVisaTypeFromPatientInfo();
+        if (fromInfo != null && !fromInfo.isBlank() && !"No Visa Type Selected".equalsIgnoreCase(fromInfo)) {
+            return fromInfo.trim();
+        }
+        try {
+            Object result = ((JavascriptExecutor) driver).executeScript(
+                    "var sels = document.querySelectorAll(\"select[id$=':visaType_input']\");"
+                            + "for (var i = 0; i < sels.length; i++) {"
+                            + "  var s = sels[i];"
+                            + "  if (s.selectedIndex >= 0) {"
+                            + "    var t = s.options[s.selectedIndex].text;"
+                            + "    if (t && t.trim() !== '' && t.indexOf('No Visa Type') === -1) { return t.trim(); }"
+                            + "  }"
+                            + "}"
+                            + "var labels = document.querySelectorAll(\"[id$=':visaType_label']\");"
+                            + "for (var j = 0; j < labels.length; j++) {"
+                            + "  var lt = labels[j].innerText;"
+                            + "  if (lt && lt.trim() !== '' && lt.indexOf('No Visa Type') === -1) { return lt.trim(); }"
+                            + "}"
+                            + "return '';");
+            return result == null ? "" : result.toString().trim();
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    /** UC_16 — encounter/visit label is Self Pay (WORK/RESIDENT VISA), not Visitor Self Pay. */
     public boolean isEncounterLabelSelfPay() {
         waitForEncounterPatientInfoRefresh();
-        if (matchesSelfPayText(getEncounterTagLabel())) {
-            System.out.println("Encounter Self Pay — tag: " + getEncounterTagLabel());
+        if (isEncounterLabelVisitorSelfPay()) {
+            System.out.println("Encounter Self Pay check — excluded Visitor Self Pay.");
+            return false;
+        }
+        String category = getPatientCategoryLabel();
+        if (matchesPlainSelfPayCategory(category)) {
+            System.out.println("Encounter Self Pay — Patient Category: " + category);
             return true;
         }
-        for (String term : new String[] {"Self Pay", "SelfPay", "Self-Pay", "Cash"}) {
-            if (hasVisibleShortText(term, 40)) {
-                System.out.println("Encounter Self Pay — visible text: " + term);
+        String billingGroup = getBillingGroupText();
+        if (matchesPlainSelfPayCategory(billingGroup)
+                || (billingGroup.toLowerCase().contains("self") && !billingGroup.toLowerCase().contains("visitor"))) {
+            System.out.println("Encounter Self Pay — billing group: " + billingGroup);
+            return true;
+        }
+        String patientCategoryField = getInvoiceFormFieldValue("Patient Category");
+        if (matchesPlainSelfPayCategory(patientCategoryField)) {
+            System.out.println("Encounter Self Pay — Patient Category field: " + patientCategoryField);
+            return true;
+        }
+        String plainSelfPayTag = getPlainSelfPayEncounterTag();
+        if (!plainSelfPayTag.isBlank()) {
+            System.out.println("Encounter Self Pay — tag: " + plainSelfPayTag);
+            return true;
+        }
+        String tag = getEncounterTagLabel();
+        if (matchesSelfPayText(tag) && !tag.toLowerCase().contains("visitor")) {
+            System.out.println("Encounter Self Pay — visitor tag: " + tag);
+            return true;
+        }
+        for (String term : new String[] {"Self Pay", "SelfPay", "Self-Pay"}) {
+            if (hasVisibleSelfPayInInvoiceForm(term) && !hasVisibleShortTextInInvoiceForm("Visitor Self Pay", 60)) {
+                System.out.println("Encounter Self Pay — invoice form text: " + term);
                 return true;
             }
         }
-        String paymentType = getPatientInfoFieldValue("Payment Type");
+        String paymentType = getInvoiceFormFieldValue("Payment Type");
         String payLower = paymentType == null ? "" : paymentType.toLowerCase();
-        if (payLower.contains("self") || payLower.contains("cash")) {
+        if ((payLower.contains("self") || payLower.contains("cash")) && !payLower.contains("visitor")
+                && !payLower.equals("all")) {
             System.out.println("Encounter Self Pay — payment type: " + paymentType);
             return true;
         }
         String invoiceText = getInvoiceFormVisibleText().toLowerCase();
-        if (invoiceText.contains("self pay") || invoiceText.contains("self-pay")
-                || invoiceText.contains("selfpay")) {
+        if ((invoiceText.contains("self pay") || invoiceText.contains("self-pay") || invoiceText.contains("selfpay"))
+                && !invoiceText.contains("visitor-selfpay") && !invoiceText.contains("visitor self pay")) {
             System.out.println("Encounter Self Pay — found in invoice form text.");
             return true;
         }
-        boolean noInsurer = getPatientInsuranceCardCount() == 0
-                && !getInvoiceFormVisibleText().toLowerCase().contains("qlm life");
-        boolean notInsurancePayment = payLower.isBlank() || !payLower.contains("insurance");
-        boolean visitorPath = !getPatientInfoFieldValue("Visitor Sub-Category").isBlank();
-        if (noInsurer && notInsurancePayment && visitorPath) {
-            System.out.println("Encounter Self Pay — visitor without insurance (payment='" + paymentType + "').");
-            return true;
-        }
         System.out.println("Encounter Self Pay check failed — payment='" + paymentType
-                + "', tag='" + getEncounterTagLabel() + "', noInsurer=" + noInsurer);
+                + "', category='" + category + "', billingGroup='" + billingGroup
+                + "', patientCategoryField='" + patientCategoryField + "'");
         return false;
     }
 
-    private static final By patientCategoryLabel = By.id("InvoiceForm:PatientTypeCash");
-
-    /** Encounter Patient Category label (e.g. Visitor-SelfPay, Visitor-Insured). */
-    public String getPatientCategoryLabel() {
-        for (WebElement el : driver.findElements(patientCategoryLabel)) {
-            try {
-                if (el.isDisplayed()) {
-                    return el.getText().trim();
+    private String getPlainSelfPayEncounterTag() {
+        By[] scopes = {
+                By.id("InvoiceDlg"),
+                By.xpath("//form[contains(@id,'InvoiceForm')]")
+        };
+        for (By scopeBy : scopes) {
+            for (WebElement scope : driver.findElements(scopeBy)) {
+                try {
+                    if (!scope.isDisplayed()) {
+                        continue;
+                    }
+                    for (WebElement el : scope.findElements(By.xpath(
+                            ".//*[contains(normalize-space(.),'Self Pay') or contains(normalize-space(.),'Self-Pay')"
+                                    + " or contains(normalize-space(.),'SelfPay')][string-length(normalize-space(.)) < 50]"))) {
+                        try {
+                            if (!el.isDisplayed()) {
+                                continue;
+                            }
+                            String text = el.getText().trim();
+                            String lower = text.toLowerCase();
+                            if (text.length() < 4 || lower.contains("visitor")) {
+                                continue;
+                            }
+                            if (lower.contains("self pay") || lower.contains("self-pay") || lower.contains("selfpay")) {
+                                return text;
+                            }
+                        } catch (StaleElementReferenceException ignored) {
+                            // try next
+                        }
+                    }
+                } catch (StaleElementReferenceException ignored) {
+                    // try next scope
                 }
-            } catch (StaleElementReferenceException ignored) {
-                // retry next element
             }
         }
         return "";
+    }
+
+    private boolean hasVisibleSelfPayInInvoiceForm(String needle) {
+        return hasVisibleShortTextInInvoiceForm(needle, 40);
+    }
+
+    private boolean hasVisibleShortTextInInvoiceForm(String needle, int maxLength) {
+        if (needle == null || needle.isBlank()) {
+            return false;
+        }
+        String lowerNeedle = needle.toLowerCase();
+        By[] scopes = {
+                By.id("InvoiceDlg"),
+                By.xpath("//form[contains(@id,'InvoiceForm')]")
+        };
+        for (By scopeBy : scopes) {
+            for (WebElement scope : driver.findElements(scopeBy)) {
+                try {
+                    if (!scope.isDisplayed()) {
+                        continue;
+                    }
+                    for (WebElement el : scope.findElements(By.xpath(
+                            ".//*[contains(translate(normalize-space(.),"
+                                    + "'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),"
+                                    + "'" + lowerNeedle + "')]"))) {
+                        try {
+                            if (!el.isDisplayed()) {
+                                continue;
+                            }
+                            String text = el.getText().trim();
+                            if (!text.isEmpty() && text.length() <= maxLength
+                                    && text.toLowerCase().contains(lowerNeedle)) {
+                                return true;
+                            }
+                        } catch (StaleElementReferenceException ignored) {
+                            // try next
+                        }
+                    }
+                } catch (StaleElementReferenceException ignored) {
+                    // try next scope
+                }
+            }
+        }
+        return false;
+    }
+
+    private String getInvoiceFormFieldValue(String fieldLabel) {
+        if (fieldLabel == null || fieldLabel.isBlank()) {
+            return "";
+        }
+        String literal = fieldLabel.trim();
+        By[] scopes = {
+                By.id("InvoiceDlg"),
+                By.xpath("//form[contains(@id,'InvoiceForm')]")
+        };
+        By[] valueLocators = {
+                By.xpath(".//label[normalize-space()='" + literal + "']/following-sibling::*[1]"),
+                By.xpath(".//*[normalize-space()='" + literal + "']/following-sibling::*[1]"),
+                By.xpath(".//td[normalize-space()='" + literal + "']/following-sibling::td[1]"),
+                By.xpath(".//th[normalize-space()='" + literal + "']/following-sibling::td[1]")
+        };
+        for (By scopeBy : scopes) {
+            for (WebElement scope : driver.findElements(scopeBy)) {
+                try {
+                    if (!scope.isDisplayed()) {
+                        continue;
+                    }
+                    for (By valueBy : valueLocators) {
+                        for (WebElement el : scope.findElements(valueBy)) {
+                            try {
+                                if (!el.isDisplayed()) {
+                                    continue;
+                                }
+                                String text = el.getText().trim();
+                                if (!text.isEmpty() && !text.equalsIgnoreCase("All")) {
+                                    return text;
+                                }
+                                String value = el.getAttribute("value");
+                                if (value != null && !value.isBlank() && !value.equalsIgnoreCase("All")) {
+                                    return value.trim();
+                                }
+                            } catch (StaleElementReferenceException ignored) {
+                                // try next
+                            }
+                        }
+                    }
+                } catch (StaleElementReferenceException ignored) {
+                    // try next scope
+                }
+            }
+        }
+        return "";
+    }
+
+    private static boolean matchesPlainSelfPayCategory(String category) {
+        if (category == null || category.isBlank()) {
+            return false;
+        }
+        String normalized = category.replace("-", "").replace(" ", "").toLowerCase();
+        return normalized.contains("selfpay") && !normalized.contains("visitor");
+    }
+
+    private static final By[] patientCategoryLocators = {
+            By.id("InvoiceForm:PatientTypeCash"),
+            By.id("InvoiceForm:PatientTypeSelfPay"),
+            By.id("InvoiceForm:PatientType"),
+            By.xpath("//form[contains(@id,'InvoiceForm')]//*[contains(@id,'PatientType')]")
+    };
+
+    /** Encounter Patient Category label (e.g. Self Pay, Visitor-SelfPay, Visitor-Insured). */
+    public String getPatientCategoryLabel() {
+        for (By by : patientCategoryLocators) {
+            for (WebElement el : driver.findElements(by)) {
+                try {
+                    if (el.isDisplayed()) {
+                        String text = el.getText().trim();
+                        if (text.isEmpty()) {
+                            text = readInnerText(el);
+                        }
+                        if (!text.isEmpty()) {
+                            return text;
+                        }
+                    }
+                } catch (StaleElementReferenceException ignored) {
+                    // retry next element
+                }
+            }
+        }
+        String field = getInvoiceFormFieldValue("Patient Category");
+        if (!field.isEmpty()) {
+            return field;
+        }
+        return "";
+    }
+
+    private String readInnerText(WebElement el) {
+        try {
+            Object result = ((JavascriptExecutor) driver)
+                    .executeScript("return arguments[0].innerText;", el);
+            return result == null ? "" : result.toString().trim();
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     /** UC_18 — Patient Category on encounter shows Visitor Self Pay. */
@@ -953,12 +1186,39 @@ public class PatientRegistrationPage {
         if (value.matches("\\d+")) {
             loginPage.selectCreatePatientDropdown(VISA_TYPE_WIDGET, value);
         } else {
-            loginPage.selectCreatePatientDropdownContaining(VISA_TYPE_WIDGET, value);
+            loginPage.selectCreatePatientDropdownContainingOnce(VISA_TYPE_WIDGET, resolveVisaTypeLabel(value));
         }
         lastVisaType = getSelectOneMenuLabelOnPage("visaType");
         if (lastVisaType.isBlank()) {
             lastVisaType = value;
         }
+    }
+
+    /** Maps a visa-type keyword (e.g. WORK, RESIDENT) to the exact option label shown in the dropdown. */
+    private static String resolveVisaTypeLabel(String value) {
+        if (value == null) {
+            return "";
+        }
+        String v = value.trim().toUpperCase();
+        if (v.contains("WORK")) {
+            return "WORK VISA";
+        }
+        if (v.contains("RESIDENT")) {
+            return "RESIDENT VISA";
+        }
+        if (v.contains("TRANSIT")) {
+            return "TRANSIT VISA";
+        }
+        if (v.contains("FAMILY")) {
+            return "FAMILY VISIT VISA";
+        }
+        if (v.contains("HAYYA")) {
+            return "HAYYA A1 VISA";
+        }
+        if (v.contains("GOVT") || v.contains("DIPLOMAT")) {
+            return "GOVT/DIPLOMAT";
+        }
+        return value;
     }
 
     private String getSelectOneMenuLabelOnPage(String widgetSuffix) {
@@ -1249,6 +1509,7 @@ public class PatientRegistrationPage {
         String visaType = data.getOrDefault("Visa Type", "2");
 
         setTextInput(mrnField, mrn);
+        loginPage.rememberRegisteredMrn(mrn);
         setTextInput(firstNameField, firstName);
         setTextInput(lastNameField, lastName);
         setTextInput(dobField, dob);

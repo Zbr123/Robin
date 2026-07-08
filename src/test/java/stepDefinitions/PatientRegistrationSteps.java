@@ -99,6 +99,12 @@ public class PatientRegistrationSteps {
                 "Missing QID, passport, visitor sub-category, visa type, and reason for missing QID should be stored.");
     }
 
+    @Then("the visa type {string} should be displayed on the encounter page")
+    public void theVisaTypeShouldBeDisplayedOnTheEncounterPage(String expectedVisaType) {
+        Assert.assertTrue(patientRegistrationPage.isVisaTypeDisplayedOnEncounter(expectedVisaType),
+                "Visa type '" + expectedVisaType + "' should be displayed on the encounter page.");
+    }
+
     @And("the patient insurer should be listed on the encounter")
     public void thePatientInsurerShouldBeListedOnTheEncounter() {
         Assert.assertTrue(patientRegistrationPage.isPatientInsurerListedOnEncounter(),
@@ -197,6 +203,25 @@ public class PatientRegistrationSteps {
         loginPage.searchVisitInPatientAccess(mrn);
         loginPage.openVisitFromPatientAccessListByMrn(mrn);
         System.out.println("Reopened created visit from Patient Access for MRN: " + mrn);
+    }
+
+    @When("I close the encounter tab without saving the visit")
+    public void iCloseTheEncounterTabWithoutSavingTheVisit() {
+        loginPage.closeEncounterTabWithoutSavingVisit();
+    }
+
+    @And("I search for the created patient visit in Patient Access")
+    public void iSearchForTheCreatedPatientVisitInPatientAccess() {
+        loginPage.returnToPatientAccessVisitList();
+        String mrn = loginPage.getLastRegisteredMrn();
+        loginPage.searchVisitInPatientAccess(mrn);
+    }
+
+    @Then("no visit should be found for the created patient")
+    public void noVisitShouldBeFoundForTheCreatedPatient() {
+        String mrn = loginPage.getLastRegisteredMrn();
+        Assert.assertTrue(loginPage.isVisitAbsentFromPatientAccessList(mrn),
+                "No visit should exist in Patient Access for MRN: " + mrn);
     }
 
     @And("I save the Edit Patient modal after adding insurance")

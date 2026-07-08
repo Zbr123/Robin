@@ -66,8 +66,8 @@ Good for validating a step before adding it to Java/TypeScript.
 ```powershell
 cd "C:\Users\co-ventechpc\Desktop\Robin"
 
-mvn test "-Dtest=PatientRegistrationTestRunner" "-Dheaded=true" "-Dcucumber.filter.tags=@TC15 and @UI"
-mvn test "-Dtest=PatientRegistrationTestRunner" "-Dheaded=true" "-Dcucumber.filter.tags=@TC18 and @UI"
+mvn test "-Dtest=PatientRegistrationTestRunner" "-Dheaded=true" "-Dcucumber.filter.tags=@UC_01_Test_Case_15 and @UI"
+mvn test "-Dtest=PatientRegistrationTestRunner" "-Dheaded=true" "-Dcucumber.filter.tags=@UC_01_Test_Case_18 and @UI"
 mvn test "-Dtest=AuditTestRunner" "-Dheaded=true"
 mvn test "-Dtest=BillingTestRunner" "-Dheaded=true"
 ```
@@ -79,7 +79,7 @@ cd "C:\Users\co-ventechpc\Desktop\Robin Playwright"
 
 npm run test:headed
 npm run test:tc18
-npx cucumber-js --tags "@TC15 and @UI"
+npx cucumber-js --tags "@UC_01_Test_Case_15 and @UI"
 ```
 
 ---

@@ -18,7 +18,7 @@ alwaysApply: false
 mvn test "-Dtest=PatientRegistrationTestRunner" "-Dheaded=true"
 
 # Single tag
-mvn test "-Dtest=PatientRegistrationTestRunner" "-Dheaded=true" "-Dcucumber.filter.tags=@TestCase15 and @UI"
+mvn test "-Dtest=PatientRegistrationTestRunner" "-Dheaded=true" "-Dcucumber.filter.tags=@UC_01_Test_Case_15 and @UI"
 
 # Other suites
 mvn test "-Dtest=AuditTestRunner" "-Dheaded=true"

@@ -509,6 +509,46 @@ public class LoginPage {
         }
     }
 
+    /**
+     * Single-pass select (no retry loop): waits once for the selectOneMenu to be enabled,
+     * opens the panel once, then clicks the option whose label/text contains {@code keyword}.
+     */
+    public void selectCreatePatientDropdownContainingOnce(String widgetBaseId, String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return;
+        }
+        String needle = keyword.trim().toLowerCase();
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20));
+        wait.until(d -> {
+            List<WebElement> widgets = d.findElements(By.id(widgetBaseId));
+            if (widgets.isEmpty()) {
+                return false;
+            }
+            WebElement widget = widgets.get(0);
+            String cls = widget.getAttribute("class");
+            return widget.isDisplayed() && (cls == null || !cls.contains("ui-state-disabled"));
+        });
+        openSelectOneMenuPanel(widgetBaseId, wait);
+        String panelDomId = widgetBaseId + "_panel";
+        wait.until(d -> selectOneMenuPanelHasVisibleItems(panelDomId));
+        WebElement panel = findDisplayedPanelById(panelDomId);
+        for (WebElement li : findSelectOneMenuListItems(panel)) {
+            if (!li.isDisplayed()) {
+                continue;
+            }
+            String dataLabel = li.getAttribute("data-label");
+            String text = li.getText();
+            String combined = ((dataLabel != null ? dataLabel : "") + " " + (text != null ? text : ""))
+                    .toLowerCase();
+            if (combined.contains(needle)) {
+                clickListOption(li);
+                return;
+            }
+        }
+        throw new org.openqa.selenium.NoSuchElementException(
+                "No option containing '" + keyword + "' in " + widgetBaseId);
+    }
+
     /** Select first dropdown row whose label/text contains {@code keyword} (case-insensitive). */
     public void selectCreatePatientDropdownContaining(String widgetBaseId, String keyword) {
         if (keyword == null || keyword.isBlank()) {
@@ -2923,6 +2963,79 @@ public class LoginPage {
         confirmUnsavedVisitChangesDialogIfPresent();
         waitForBlockingOverlaysToClose(new WebDriverWait(driver, Duration.ofSeconds(30)));
         System.out.println("Closed visit dialog.");
+    }
+
+    /** Closes the encounter/visit dialog and discards unsaved visit changes (no visit persisted). */
+    public void closeEncounterTabWithoutSavingVisit() {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+        List<WebElement> dialogs = driver.findElements(By.id("InvoiceDlg"));
+        if (dialogs.isEmpty() || !dialogs.get(0).isDisplayed()) {
+            returnToPatientAccessVisitList();
+            System.out.println("Encounter tab already closed — returned to visit list.");
+            return;
+        }
+        try {
+            WebElement close = wait.until(ExpectedConditions.elementToBeClickable(
+                    By.cssSelector("#InvoiceDlg .ui-dialog-titlebar-close")));
+            scrollToElement(close);
+            close.click();
+        } catch (org.openqa.selenium.TimeoutException e) {
+            ((JavascriptExecutor) driver).executeScript(
+                    "if (typeof PF !== 'undefined' && PF('NewInvoiceWid')) { PF('NewInvoiceWid').hide(); }");
+        }
+        dismissUnsavedVisitChangesDialogIfPresent();
+        waitForBlockingOverlaysToClose(new WebDriverWait(driver, Duration.ofSeconds(30)));
+        try {
+            wait.until(ExpectedConditions.visibilityOfElementLocated(By.id("phWLForm:phWLTbl_data")));
+        } catch (org.openqa.selenium.TimeoutException e) {
+            clickPatientAccess();
+            wait.until(ExpectedConditions.visibilityOfElementLocated(By.id("phWLForm:phWLTbl_data")));
+        }
+        System.out.println("Closed encounter tab without saving the visit.");
+    }
+
+    private void dismissUnsavedVisitChangesDialogIfPresent() {
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(5));
+        try {
+            WebElement noBtn = wait.until(d -> findVisiblePrimeFacesConfirmDialogButton(d, "No"));
+            scrollToElement(noBtn);
+            try {
+                noBtn.click();
+            } catch (ElementClickInterceptedException e) {
+                ((JavascriptExecutor) driver).executeScript("arguments[0].click();", noBtn);
+            }
+            waitForBlockingOverlaysToClose(new WebDriverWait(driver, Duration.ofSeconds(30)));
+            System.out.println("Discarded unsaved visit changes.");
+        } catch (org.openqa.selenium.TimeoutException ignored) {
+            // no confirmation shown
+        }
+    }
+
+    public boolean isVisitAbsentFromPatientAccessList(String mrn) {
+        if (mrn == null || mrn.isBlank()) {
+            System.out.println("Visit absence check failed — MRN is blank.");
+            return false;
+        }
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
+        try {
+            boolean absent = Boolean.TRUE.equals(wait.until(d -> {
+                for (WebElement row : d.findElements(patientAccessRowByMrn(mrn))) {
+                    try {
+                        if (row.isDisplayed()) {
+                            return false;
+                        }
+                    } catch (org.openqa.selenium.StaleElementReferenceException ignored) {
+                        // re-check on next poll
+                    }
+                }
+                return true;
+            }));
+            System.out.println("Visit for MRN " + mrn + " absent from Patient Access list: " + absent);
+            return absent;
+        } catch (org.openqa.selenium.TimeoutException e) {
+            System.out.println("Visit for MRN " + mrn + " still present in Patient Access list.");
+            return false;
+        }
     }
 
     private void confirmUnsavedVisitChangesDialogIfPresent() {

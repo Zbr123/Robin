@@ -32,7 +32,7 @@ Feature: Complete Patient Journey with Billing
       | Medical Service     | Aids and Appliances         |
       | ED Triage Code      | 1 - Resuscitation Immediate |
       | ED Disposition Code | Admitted                    |
-      | Encounter Class     | Inpatient                   |
+      | Encounter Class     | Emergency                   |
       | Encounter Status    | In-Progress                 |
     And I click on Diagnosis and Interventions
     And I fill mandatory add service details
